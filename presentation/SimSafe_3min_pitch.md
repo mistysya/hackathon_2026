@@ -2,7 +2,7 @@
 title: "SimSafe"
 subtitle: "Personalized security training—without invasive data collection"
 format: "16:9 presentation"
-length: "3 minutes / 6 slides"
+length: "3 minutes / 7 slides"
 ---
 
 # SimSafe
@@ -59,6 +59,18 @@ length: "3 minutes / 6 slides"
 
 ---
 
+# Employee view: a realistic, controlled inbox
+
+![Actual SimSafe employee mailbox screenshot showing the delivered training email](assets/employee-mailbox-view.png)
+
+The employee receives a **clearly controlled training email** in a familiar mailbox view, then chooses whether to open the training preview.
+
+*Actual end-to-end demo capture. The inbox is a local simulated mailbox; no real email is sent.*
+
+**Say (30 sec):** “This is the employee experience. The message is delivered to a realistic but controlled inbox. Opening it records only an exercise event, and the training link leads to our controlled landing page.”
+
+---
+
 # A learning loop, not a gotcha
 
 ![Actual SimSafe console screenshot: controlled email interaction and results dashboard](assets/console-simulation-results.png)
@@ -70,7 +82,7 @@ length: "3 minutes / 6 slides"
 
 *Actual end-to-end demo capture; this screen shows one completed demo journey.*
 
-**Say (35 sec):** “The click does not end in a punishment. It opens a controlled training page and then a learning reveal. The dashboard records only the progression through the exercise, so teams can improve training rather than shame individuals.”
+**Say (30 sec):** “The click does not end in a punishment. It opens a controlled training page and then a learning reveal. The dashboard records only the progression through the exercise, so teams can improve training rather than shame individuals.”
 
 ---
 
@@ -89,4 +101,4 @@ A clear event funnel from simulated delivery to training viewed.
 
 ### SimSafe turns a risky moment into a teachable one.
 
-**Say (25 sec):** “Our MVP already demonstrates the complete controlled journey. Next, we would expand role-based scenarios and learning content while preserving the same privacy and approval boundaries. Thank you.”
+**Say (20 sec):** “Our MVP already demonstrates the complete controlled journey. Next, we would expand role-based scenarios and learning content while preserving the same privacy and approval boundaries. Thank you.”
