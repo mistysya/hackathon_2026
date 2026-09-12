@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+
+	"github.com/mistysya/hackathon_2026/backend/internal/domain"
 )
 
 type Repository struct {
@@ -32,7 +34,7 @@ WHERE t.token = ? AND c.status = 'simulated'`
 		return LandingPageData{}, err
 	}
 
-	config := LandingConfig{
+	config := domain.LandingConfig{
 		Title:       "安全演練頁面",
 		Brand:       "Demo Corp Security Sandbox",
 		Description: "這是受控演練頁面，不會傳送或保存表單欄位值。",
@@ -53,7 +55,7 @@ WHERE t.token = ? AND c.status = 'simulated'`
 	}, nil
 }
 
-func (r *Repository) RecordEvent(ctx context.Context, req EventRequest) error {
+func (r *Repository) RecordEvent(ctx context.Context, req domain.EventRequest) error {
 	if req.Token == "" {
 		return ErrInvalidToken
 	}
@@ -111,13 +113,70 @@ VALUES (?, ?, ?)`, campaignID, employeeID, token); err != nil {
 
 	return SimulateResponse{
 		CampaignID: campaignID,
-		Status:     "simulated",
+		Status:     domain.CampaignStatusSimulated,
 		Targets: []SimulateTarget{{
 			EmployeeID: employeeID,
 			Token:      token,
 			LandingURL: fmt.Sprintf("/landing/%s", token),
 		}},
 	}, nil
+}
+
+func (r *Repository) CampaignReport(ctx context.Context, campaignID string) (domain.CampaignReport, error) {
+	var exists int
+	if err := r.db.QueryRowContext(ctx, `SELECT 1 FROM campaigns WHERE id = ?`, campaignID).Scan(&exists); err != nil {
+		if err == sql.ErrNoRows {
+			return domain.CampaignReport{}, ErrNotFound
+		}
+		return domain.CampaignReport{}, err
+	}
+
+	report := domain.CampaignReport{CampaignID: campaignID, Events: []domain.CampaignEvent{}}
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM campaign_targets WHERE campaign_id = ?`, campaignID).Scan(&report.TargetCount); err != nil {
+		return domain.CampaignReport{}, err
+	}
+	report.Funnel.Simulated = report.TargetCount
+
+	if err := r.db.QueryRowContext(ctx, `
+SELECT
+	COUNT(DISTINCT CASE WHEN event_type = 'opened' THEN employee_id END),
+	COUNT(DISTINCT CASE WHEN event_type = 'clicked' THEN employee_id END),
+	COUNT(DISTINCT CASE WHEN event_type = 'form_attempted' THEN employee_id END),
+	COUNT(DISTINCT CASE WHEN event_type = 'training_viewed' THEN employee_id END)
+FROM tracking_events
+WHERE campaign_id = ?`, campaignID).Scan(
+		&report.Funnel.Opened,
+		&report.Funnel.Clicked,
+		&report.Funnel.FormAttempted,
+		&report.Funnel.TrainingViewed,
+	); err != nil {
+		return domain.CampaignReport{}, err
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+SELECT event_type, occurred_at
+FROM tracking_events
+WHERE campaign_id = ?
+ORDER BY occurred_at ASC, id ASC`, campaignID)
+	if err != nil {
+		return domain.CampaignReport{}, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var event domain.CampaignEvent
+		if err := rows.Scan(&event.EventType, &event.OccurredAt); err != nil {
+			return domain.CampaignReport{}, err
+		}
+		if !event.EventType.Valid() {
+			return domain.CampaignReport{}, fmt.Errorf("invalid stored event type %q", event.EventType)
+		}
+		report.Events = append(report.Events, event)
+	}
+	if err := rows.Err(); err != nil {
+		return domain.CampaignReport{}, err
+	}
+	return report, nil
 }
 
 func newToken() (string, error) {

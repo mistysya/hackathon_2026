@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"html/template"
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/mistysya/hackathon_2026/backend/internal/domain"
 	"github.com/mistysya/hackathon_2026/backend/internal/httpapi"
 )
 
@@ -22,6 +24,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/landing/{token}", h.GetLanding)
 	r.Post("/events", h.PostEvent)
 	r.Post("/campaigns/{id}/simulate", h.PostSimulate)
+	r.Get("/reports/{campaignId}", h.GetReport)
 }
 
 func (h *Handler) Routes() http.Handler {
@@ -43,11 +46,15 @@ func (h *Handler) GetLanding(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PostEvent(w http.ResponseWriter, r *http.Request) {
-	var req EventRequest
+	var req domain.EventRequest
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&req); err != nil {
 		httpapi.WriteError(w, r, http.StatusBadRequest, "invalid_json", "invalid JSON request")
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		httpapi.WriteError(w, r, http.StatusBadRequest, "invalid_json", "request body must contain exactly one JSON object")
 		return
 	}
 	if err := h.repo.RecordEvent(r.Context(), req); err != nil {
@@ -64,6 +71,15 @@ func (h *Handler) PostSimulate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
+	report, err := h.repo.CampaignReport(r.Context(), chi.URLParam(r, "campaignId"))
+	if err != nil {
+		writeMappedError(w, r, err, "campaign_not_found", "campaign not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
 }
 
 func writeMappedError(w http.ResponseWriter, r *http.Request, err error, notFoundCode, notFoundMessage string) {

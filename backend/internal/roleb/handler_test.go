@@ -3,11 +3,13 @@ package roleb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/mistysya/hackathon_2026/backend/internal/domain"
 	"github.com/mistysya/hackathon_2026/backend/internal/store"
 )
 
@@ -125,23 +127,77 @@ func TestLandingPageRecordsClickedOnlyAndRevealsEducationOnSubmit(t *testing.T) 
 	}
 }
 
-func TestRenderEmailEscapesHTMLOnceAndPreservesPlainText(t *testing.T) {
-	template := ScenarioTemplates[0]
-	rendered, err := RenderEmail(template, map[string]string{
-		"DisplayName": "R&D User",
-		"Topic":       "R&D 資安",
-	})
+func TestPostEventRejectsTrailingJSONWithoutWritingEvent(t *testing.T) {
+	db, handler := testServer(t)
+	defer db.Close()
+	_, err := db.Exec(`UPDATE campaigns SET status = 'simulated' WHERE id = 'c_demo'; INSERT INTO campaign_targets (campaign_id, employee_id, token) VALUES ('c_demo', 'E001', 'tok_demo');`)
 	if err != nil {
-		t.Fatalf("render email: %v", err)
+		t.Fatalf("seed target: %v", err)
 	}
-	if !strings.Contains(rendered.Subject, "R&D 資安") {
-		t.Fatalf("plain-text subject was HTML escaped: %q", rendered.Subject)
+
+	req := httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(`{"token":"tok_demo","eventType":"clicked"}{}`))
+	req.Header.Set("Content-Type", "application/json")
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+
+	if res.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d body=%s", res.Code, res.Body.String())
 	}
-	if !strings.Contains(rendered.Text, "R&D User") || strings.Contains(rendered.Text, "&amp;") {
-		t.Fatalf("plain-text email should preserve ampersands: %q", rendered.Text)
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM tracking_events WHERE campaign_id = 'c_demo'`).Scan(&count); err != nil {
+		t.Fatalf("count events: %v", err)
 	}
-	if !strings.Contains(rendered.HTML, "R&amp;D User") || strings.Contains(rendered.HTML, "R&amp;amp;D") {
-		t.Fatalf("HTML email should escape values exactly once: %q", rendered.HTML)
+	if count != 0 {
+		t.Fatalf("trailing JSON request wrote %d events", count)
+	}
+}
+
+func TestCampaignReportReturnsDistinctFunnelAndTimeline(t *testing.T) {
+	db, handler := testServer(t)
+	defer db.Close()
+	_, err := db.Exec(`
+UPDATE campaigns SET status = 'simulated' WHERE id = 'c_demo';
+INSERT INTO campaign_targets (campaign_id, employee_id, token) VALUES ('c_demo', 'E001', 'tok_demo');
+INSERT INTO tracking_events (campaign_id, employee_id, event_type, occurred_at) VALUES
+  ('c_demo', 'E001', 'opened', '2026-09-12T14:03:11Z'),
+  ('c_demo', 'E001', 'clicked', '2026-09-12T14:03:29Z'),
+  ('c_demo', 'E001', 'form_attempted', '2026-09-12T14:03:52Z'),
+  ('c_demo', 'E001', 'training_viewed', '2026-09-12T14:03:54Z');`)
+	if err != nil {
+		t.Fatalf("seed report: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/c_demo", nil)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", res.Code, res.Body.String())
+	}
+
+	var report domain.CampaignReport
+	if err := json.NewDecoder(res.Body).Decode(&report); err != nil {
+		t.Fatalf("decode report: %v", err)
+	}
+	if report.CampaignID != "c_demo" || report.TargetCount != 1 {
+		t.Fatalf("unexpected report identity: %+v", report)
+	}
+	if report.Funnel != (domain.CampaignFunnel{Simulated: 1, Opened: 1, Clicked: 1, FormAttempted: 1, TrainingViewed: 1}) {
+		t.Fatalf("unexpected funnel: %+v", report.Funnel)
+	}
+	if len(report.Events) != 4 || report.Events[0].EventType != domain.EventTypeOpened || report.Events[3].EventType != domain.EventTypeTrainingViewed {
+		t.Fatalf("unexpected timeline: %+v", report.Events)
+	}
+}
+
+func TestCampaignReportReturnsNotFound(t *testing.T) {
+	db, handler := testServer(t)
+	defer db.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/missing", nil)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusNotFound {
+		t.Fatalf("status = %d body=%s", res.Code, res.Body.String())
 	}
 }
 

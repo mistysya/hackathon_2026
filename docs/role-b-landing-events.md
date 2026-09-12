@@ -11,21 +11,18 @@
   - 不在 landing 頁送 `opened`，保留給信件預覽畫面觸發。
 - `POST /events`：接受 `{ "token": "...", "eventType": "clicked" }`，以 token 反查 target 並 `INSERT OR IGNORE`，確保同一 target 同一事件只記一次。
 - `POST /campaigns/{id}/simulate`：approved campaign 產生 32-hex tracking token，建立 target，回傳 `/landing/{token}`。
-- 4 個受控情境信件模板：`event_followup`、`training_reminder`、`benefit_update`、`saas_security_notice`。
+- `GET /reports/{campaignId}`：依 distinct target 彙整漏斗並回傳事件時間軸。
 
-## 本機啟動
+信件與情境內容由 Member A campaign generator 單一管理；Role B 使用 persisted `landing_config_json` 渲染受控頁面，避免維護第二套模板。
+
+## 驗證與整合
 
 ```bash
 cd backend
 go test ./...
-go run ./cmd/api
 ```
 
-Role B routes 透過 Role A 的共用 Router、Middleware 與 SQLite lifecycle 啟動。Schema 由 Go embed 初始化，DB DSN 可用環境變數覆寫：
-
-```bash
-DATABASE_DSN='file:app.db?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)' go run ./cmd/api
-```
+Role B 的 Handler 實作 `httpapi.RouteRegistrar`，不直接擁有 `cmd/api` composition root。最終由 backend integration branch 將 Role B Handler 傳入共用 Router，並共用 Middleware、SQLite lifecycle 與 Go embedded schema。
 
 ## 安全邊界
 
