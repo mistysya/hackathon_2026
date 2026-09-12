@@ -54,7 +54,10 @@ WHERE t.token = ? AND c.status = 'simulated'`
 }
 
 func (r *Repository) RecordEvent(ctx context.Context, req EventRequest) error {
-	if req.Token == "" || !req.EventType.Valid() {
+	if req.Token == "" {
+		return ErrInvalidToken
+	}
+	if !req.EventType.Valid() {
 		return ErrInvalidEvent
 	}
 

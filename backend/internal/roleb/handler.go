@@ -67,9 +67,9 @@ func (h *Handler) PostSimulate(w http.ResponseWriter, r *http.Request) {
 
 func writeMappedError(w http.ResponseWriter, err error, notFoundCode, notFoundMessage string) {
 	switch {
-	case errors.Is(err, ErrNotFound):
+	case errors.Is(err, ErrNotFound), errors.Is(err, ErrInvalidToken):
 		writeError(w, http.StatusNotFound, notFoundCode, notFoundMessage)
-	case errors.Is(err, ErrInvalidEvent), errors.Is(err, ErrInvalidRequest):
+	case errors.Is(err, ErrInvalidEvent):
 		writeError(w, http.StatusBadRequest, "invalid_event", "eventType must be one of opened, clicked, form_attempted, training_viewed")
 	case errors.Is(err, ErrConflict):
 		writeError(w, http.StatusConflict, "invalid_campaign_status", "campaign must be approved before simulate")

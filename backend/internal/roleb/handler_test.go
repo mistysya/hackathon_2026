@@ -125,6 +125,40 @@ func TestLandingPageRecordsClickedOnlyAndRevealsEducationOnSubmit(t *testing.T) 
 	}
 }
 
+func TestRenderEmailEscapesHTMLOnceAndPreservesPlainText(t *testing.T) {
+	template := ScenarioTemplates[0]
+	rendered, err := RenderEmail(template, map[string]string{
+		"DisplayName": "R&D User",
+		"Topic":       "R&D 資安",
+	})
+	if err != nil {
+		t.Fatalf("render email: %v", err)
+	}
+	if !strings.Contains(rendered.Subject, "R&D 資安") {
+		t.Fatalf("plain-text subject was HTML escaped: %q", rendered.Subject)
+	}
+	if !strings.Contains(rendered.Text, "R&D User") || strings.Contains(rendered.Text, "&amp;") {
+		t.Fatalf("plain-text email should preserve ampersands: %q", rendered.Text)
+	}
+	if !strings.Contains(rendered.HTML, "R&amp;D User") || strings.Contains(rendered.HTML, "R&amp;amp;D") {
+		t.Fatalf("HTML email should escape values exactly once: %q", rendered.HTML)
+	}
+}
+
+func TestPostEventRejectsMissingTokenAsNotFound(t *testing.T) {
+	db, handler := testServer(t)
+	defer db.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/events", strings.NewReader(`{"eventType":"clicked"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+
+	if res.Code != http.StatusNotFound {
+		t.Fatalf("status = %d body=%s", res.Code, res.Body.String())
+	}
+}
+
 func TestPostEventRejectsInvalidEventType(t *testing.T) {
 	db, handler := testServer(t)
 	defer db.Close()

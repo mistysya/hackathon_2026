@@ -10,10 +10,10 @@ const (
 )
 
 var (
-	ErrNotFound       = errors.New("not found")
-	ErrInvalidEvent   = errors.New("invalid event type")
-	ErrInvalidRequest = errors.New("invalid request")
-	ErrConflict       = errors.New("state conflict")
+	ErrNotFound     = errors.New("not found")
+	ErrInvalidToken = errors.New("invalid tracking token")
+	ErrInvalidEvent = errors.New("invalid event type")
+	ErrConflict     = errors.New("state conflict")
 )
 
 type EventType string

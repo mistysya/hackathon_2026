@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"html/template"
 	"strings"
+	texttemplate "text/template"
 )
 
 type ScenarioTemplate struct {
@@ -119,7 +120,7 @@ func RenderEmail(t ScenarioTemplate, data map[string]string) (RenderedEmail, err
 }
 
 func renderText(tmpl string, data map[string]string) (string, error) {
-	parsed, err := template.New("text").Parse(tmpl)
+	parsed, err := texttemplate.New("text").Parse(tmpl)
 	if err != nil {
 		return "", err
 	}
