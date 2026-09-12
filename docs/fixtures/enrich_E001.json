@@ -1,0 +1,24 @@
+{
+  "employeeId": "E001",
+  "displayName": "Demo User",
+  "department": "Engineering",
+  "publicFacts": [
+    {
+      "fact": "近期參加公開 AI 資安技術研討會",
+      "sourceUrl": "https://example.com/event/ai-security-workshop",
+      "confidence": 0.88,
+      "sourceType": "fixture"
+    },
+    {
+      "fact": "於公開技術部落格分享後端開發文章",
+      "sourceUrl": "https://example.com/blog/demo-user",
+      "confidence": 0.72,
+      "sourceType": "fixture"
+    }
+  ],
+  "riskSignals": [
+    "可能較容易受到活動通知類演練情境影響",
+    "可能會點擊與技術研討會相關的後續通知"
+  ],
+  "recommendedScenario": "event_followup"
+}
