@@ -9,10 +9,9 @@ import (
 	backendassets "github.com/mistysya/hackathon_2026/backend"
 	"github.com/mistysya/hackathon_2026/backend/internal/ports"
 	"modernc.org/sqlite"
-	_ "modernc.org/sqlite"
 )
 
-const DefaultDSN = "file:/data/app.db?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+const DefaultDSN = "file:app.db?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
 
 type Repository struct {
 	db *sql.DB

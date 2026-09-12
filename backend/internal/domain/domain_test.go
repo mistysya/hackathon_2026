@@ -33,6 +33,34 @@ func TestEnumsValidateFrozenValues(t *testing.T) {
 	if Difficulty("extreme").Valid() {
 		t.Fatal("unexpected valid Difficulty")
 	}
+
+	for _, value := range []EventType{EventTypeOpened, EventTypeClicked, EventTypeFormAttempted, EventTypeTrainingViewed} {
+		if !value.Valid() {
+			t.Fatalf("EventType %q should be valid", value)
+		}
+	}
+	if EventType("submitted").Valid() {
+		t.Fatal("unexpected valid EventType")
+	}
+}
+
+func TestCampaignReportMarshalsFrozenFieldNamesAndEmptyEvents(t *testing.T) {
+	data, err := json.Marshal(CampaignReport{CampaignID: "c_1"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	text := string(data)
+	for _, fragment := range []string{
+		`"campaignId":"c_1"`,
+		`"targetCount":0`,
+		`"formAttempted":0`,
+		`"trainingViewed":0`,
+		`"events":[]`,
+	} {
+		if !strings.Contains(text, fragment) {
+			t.Fatalf("missing %s in %s", fragment, text)
+		}
+	}
 }
 
 func TestEmployeeProfileMarshalsEmptySlices(t *testing.T) {

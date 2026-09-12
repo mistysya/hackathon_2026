@@ -54,6 +54,26 @@ func (value Difficulty) Valid() bool {
 	}
 }
 
+// EventType is the deduplicated funnel event emitted by the landing experience.
+// Its values are fixed by docs/api-contract.md.
+type EventType string
+
+const (
+	EventTypeOpened         EventType = "opened"
+	EventTypeClicked        EventType = "clicked"
+	EventTypeFormAttempted  EventType = "form_attempted"
+	EventTypeTrainingViewed EventType = "training_viewed"
+)
+
+func (value EventType) Valid() bool {
+	switch value {
+	case EventTypeOpened, EventTypeClicked, EventTypeFormAttempted, EventTypeTrainingViewed:
+		return true
+	default:
+		return false
+	}
+}
+
 type Employee struct {
 	EmployeeID  string `json:"employeeId"`
 	DisplayName string `json:"displayName"`
@@ -135,6 +155,41 @@ type GeneratedCampaign struct {
 	ApprovedBy      *string        `json:"approvedBy"`
 	ApprovedAt      *string        `json:"approvedAt"`
 	RejectionReason *string        `json:"rejectionReason"`
+}
+
+// EventRequest is intentionally free of employee and campaign identifiers:
+// the event endpoint resolves those from the opaque target token.
+type EventRequest struct {
+	Token     string    `json:"token"`
+	EventType EventType `json:"eventType"`
+}
+
+type CampaignFunnel struct {
+	Simulated      int `json:"simulated"`
+	Opened         int `json:"opened"`
+	Clicked        int `json:"clicked"`
+	FormAttempted  int `json:"formAttempted"`
+	TrainingViewed int `json:"trainingViewed"`
+}
+
+type CampaignEvent struct {
+	EventType  EventType `json:"eventType"`
+	OccurredAt string    `json:"occurredAt"`
+}
+
+type CampaignReport struct {
+	CampaignID  string          `json:"campaignId"`
+	TargetCount int             `json:"targetCount"`
+	Funnel      CampaignFunnel  `json:"funnel"`
+	Events      []CampaignEvent `json:"events"`
+}
+
+func (report CampaignReport) MarshalJSON() ([]byte, error) {
+	type alias CampaignReport
+	if report.Events == nil {
+		report.Events = []CampaignEvent{}
+	}
+	return json.Marshal(alias(report))
 }
 
 func (campaign GeneratedCampaign) MarshalJSON() ([]byte, error) {
