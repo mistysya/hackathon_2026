@@ -43,7 +43,7 @@ func (agent *FixtureAgent) Generate(_ context.Context, input ports.ProfileInput,
 		}
 	}
 	if hasEventEvidence {
-		profile.RiskSignals = []string{"可能適合以公開活動後的資安提醒作為後續訓練情境。"}
+		profile.RiskSignals = []string{"May be a suitable candidate for a follow-up security training scenario based on a public event."}
 		profile.RecommendedScenario = "event_followup"
 	}
 	return json.Marshal(profile)

@@ -61,7 +61,7 @@ function fixtureProfile(employee: Employee): EmployeeProfile {
   const profile = clone(demoEmployee.profile!);
   if (employee.employeeId !== demoEmployee.employeeId) {
     profile.publicFacts[1] = {
-      fact: `公開職務頁面顯示與 ${employee.department || "跨部門"} 團隊相關`,
+      fact: `Public role page shows a connection to the ${employee.department || "cross-functional"} team`,
       sourceUrl: "https://example.com/company/team-directory",
       confidence: 0.72,
       sourceType: "fixture",
@@ -82,7 +82,7 @@ function fixtureCampaign(employee: Employee): GeneratedCampaign {
     campaignId: `c_${crypto.randomUUID().replaceAll("-", "")}`,
     employeeId: employee.employeeId,
     templateId: employee.profile?.recommendedScenario ?? next.templateId,
-    emailHtml: next.emailHtml.replaceAll("Demo User", () => escapeHtml(employee.displayName || "同仁")),
+    emailHtml: next.emailHtml.replaceAll("Demo User", () => escapeHtml(employee.displayName || "Employee")),
     status: "pending_review",
     approvedBy: null,
     approvedAt: null,
@@ -100,7 +100,7 @@ export const api = {
   async getEmployee(employeeId: string): Promise<Employee> {
     if (!useFixtures) return request<Employee>(`/employees/${encodeURIComponent(employeeId)}`);
     const employee = employees.find((item) => item.employeeId === employeeId);
-    if (!employee) throw new ApiError("找不到該員工", 404);
+    if (!employee) throw new ApiError("Employee not found", 404);
     return clone(employee);
   },
 
@@ -113,7 +113,7 @@ export const api = {
     const required = ["employee_id", "display_name", "email", "department", "title", "company"];
     if (parsed.errors.length || headers.length !== required.length || required.some((field, index) => headers[index] !== field)
       || rows.some((row) => !(row.length === 1 && row[0] === "") && row.length !== required.length)) {
-      throw new ApiError("CSV 欄位或格式不符合 API 契約", 400);
+      throw new ApiError("The CSV columns or format do not match the API contract", 400);
     }
     const errors: ImportResult["errors"] = [];
     let imported = 0;
@@ -146,7 +146,7 @@ export const api = {
   async enrich(employeeId: string): Promise<EmployeeProfile> {
     if (!useFixtures) return request<EmployeeProfile>(`/employees/${encodeURIComponent(employeeId)}/enrich`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     const employee = employees.find((item) => item.employeeId === employeeId);
-    if (!employee) throw new ApiError("找不到該員工", 404);
+    if (!employee) throw new ApiError("Employee not found", 404);
     employee.profile = fixtureProfile(employee);
     return clone(employee.profile);
   },
@@ -154,8 +154,8 @@ export const api = {
   async generate(employeeId: string): Promise<GeneratedCampaign> {
     if (!useFixtures) return request<GeneratedCampaign>("/campaigns/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ employeeId }) });
     const employee = employees.find((item) => item.employeeId === employeeId);
-    if (!employee) throw new ApiError("找不到該員工", 404);
-    if (!employee.profile) throw new ApiError("請先建立 Profile", 409);
+    if (!employee) throw new ApiError("Employee not found", 404);
+    if (!employee.profile) throw new ApiError("Create a profile first", 409);
     campaign = fixtureCampaign(employee);
     report = null;
     simulation = null;
@@ -164,8 +164,8 @@ export const api = {
 
   async approve(campaignId: string, approvedBy: string): Promise<GeneratedCampaign> {
     if (!useFixtures) return request<GeneratedCampaign>(`/campaigns/${encodeURIComponent(campaignId)}/approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ approvedBy }) });
-    if (!campaign || campaign.campaignId !== campaignId || campaign.status !== "pending_review") throw new ApiError("Campaign 目前不可核准", 409);
-    if (!campaign.safetyChecks.length || campaign.safetyChecks.some((check) => !check.passed)) throw new ApiError("安全規則尚未全部通過，Campaign 不可核准", 409);
+    if (!campaign || campaign.campaignId !== campaignId || campaign.status !== "pending_review") throw new ApiError("This campaign cannot be approved right now", 409);
+    if (!campaign.safetyChecks.length || campaign.safetyChecks.some((check) => !check.passed)) throw new ApiError("All safety checks must pass before the campaign can be approved", 409);
     if (!approvedBy.trim()) throw new ApiError("approvedBy is required", 400);
     campaign = { ...campaign, status: "approved", approvedBy: approvedBy.trim(), approvedAt: now() };
     return clone(campaign);
@@ -173,7 +173,7 @@ export const api = {
 
   async reject(campaignId: string, reason: string): Promise<GeneratedCampaign> {
     if (!useFixtures) return request<GeneratedCampaign>(`/campaigns/${encodeURIComponent(campaignId)}/reject`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) });
-    if (!campaign || campaign.campaignId !== campaignId || campaign.status !== "pending_review") throw new ApiError("Campaign 目前不可拒絕", 409);
+    if (!campaign || campaign.campaignId !== campaignId || campaign.status !== "pending_review") throw new ApiError("This campaign cannot be rejected right now", 409);
     if (!reason.trim()) throw new ApiError("reason is required", 400);
     campaign = { ...campaign, status: "rejected", rejectionReason: reason.trim() };
     return clone(campaign);
@@ -181,7 +181,7 @@ export const api = {
 
   async simulate(campaignId: string): Promise<Simulation> {
     if (!useFixtures) return request<Simulation>(`/campaigns/${encodeURIComponent(campaignId)}/simulate`, { method: "POST" });
-    if (!campaign || campaign.campaignId !== campaignId || campaign.status !== "approved") throw new ApiError("未核准的 Campaign 不可模擬寄送", 409);
+    if (!campaign || campaign.campaignId !== campaignId || campaign.status !== "approved") throw new ApiError("Only an approved campaign can be simulated", 409);
     campaign = { ...campaign, status: "simulated" };
     const token = crypto.randomUUID().replaceAll("-", "");
     simulation = { campaignId, status: "simulated", targets: [{ employeeId: campaign.employeeId, token, landingUrl: `/landing/${token}` }] };
@@ -192,7 +192,7 @@ export const api = {
   async recordEvent(token: string, eventType: EventType): Promise<void> {
     if (!useFixtures) return request<void>("/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, eventType }) });
     if (!Object.hasOwn(funnelKeyByEvent, eventType)) throw new ApiError("Invalid eventType", 400);
-    if (!simulation || !report || !simulation.targets.some((item) => item.token === token)) throw new ApiError("無效 tracking token", 404);
+    if (!simulation || !report || !simulation.targets.some((item) => item.token === token)) throw new ApiError("Invalid tracking token", 404);
     if (!report.events.some((event) => event.eventType === eventType)) {
       report.events.push({ eventType, occurredAt: now() });
       report.funnel[funnelKeyByEvent[eventType]] += 1;
@@ -201,7 +201,7 @@ export const api = {
 
   async getReport(campaignId: string): Promise<CampaignReport> {
     if (!useFixtures) return request<CampaignReport>(`/reports/${encodeURIComponent(campaignId)}`);
-    if (!report || report.campaignId !== campaignId) throw new ApiError("尚無模擬報告", 404);
+    if (!report || report.campaignId !== campaignId) throw new ApiError("No simulation report is available", 404);
     return clone(report);
   },
 };
