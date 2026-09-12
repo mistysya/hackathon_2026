@@ -2,3 +2,10 @@
 *.db
 *.db-wal
 *.db-shm
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+
+# TypeScript incremental metadata
+*.tsbuildinfo
