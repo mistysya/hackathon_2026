@@ -8,13 +8,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mistysya/hackathon_2026/backend/internal/campaign"
-	"github.com/mistysya/hackathon_2026/backend/internal/employee"
 	"github.com/mistysya/hackathon_2026/backend/internal/httpapi"
-	"github.com/mistysya/hackathon_2026/backend/internal/profile"
-	"github.com/mistysya/hackathon_2026/backend/internal/roleb"
+	"github.com/mistysya/hackathon_2026/backend/internal/integration"
 	"github.com/mistysya/hackathon_2026/backend/internal/store"
-	"github.com/mistysya/hackathon_2026/backend/internal/structured"
 )
 
 func main() {
@@ -35,35 +31,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	repository := store.New(database)
-	validator, err := structured.NewValidator()
+	agentConfig, err := integration.OpenAIConfigFromEnvironment(os.Getenv)
 	if err != nil {
-		logger.Error("initialize structured validator", "error", err)
+		logger.Error("load agent configuration", "error", err)
 		os.Exit(1)
 	}
-	profileAdapter, err := profile.NewFixtureAdapter()
+	router, err := integration.NewRouter(database, logger, agentConfig, nil)
 	if err != nil {
-		logger.Error("initialize profile fixture adapter", "error", err)
+		logger.Error("initialize API routes", "error", err)
 		os.Exit(1)
 	}
-	campaignAgent, err := campaign.NewFixtureScenarioAgent()
-	if err != nil {
-		logger.Error("initialize campaign fixture agent", "error", err)
-		os.Exit(1)
-	}
-
-	employeeRoutes := employee.NewRoutes(employee.NewService(repository), logger)
-	profileRoutes := profile.NewRoutes(profile.NewService(repository, profileAdapter, profile.NewFixtureAgent(), validator), logger)
-	campaignRoutes := campaign.NewRoutes(campaign.NewService(repository, repository, campaignAgent, validator, campaign.NewCryptoIDGenerator()), logger)
-	roleBRoutes := roleb.NewHandler(roleb.NewRepository(database))
-
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		logger.Error("listen", "error", err, "address", address)
 		os.Exit(1)
 	}
 
-	server := httpapi.NewServer(address, httpapi.NewRouter(logger, employeeRoutes, profileRoutes, campaignRoutes, roleBRoutes))
+	server := httpapi.NewServer(address, router)
 	logger.Info("api listening", "address", listener.Addr().String())
 	if err := httpapi.Serve(ctx, server, listener, httpapi.DefaultShutdownTimeout); err != nil {
 		logger.Error("api stopped", "error", err)

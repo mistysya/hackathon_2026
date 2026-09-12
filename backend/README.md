@@ -59,7 +59,10 @@ The runtime runs as UID 10001 and defaults SQLite to `/data/app.db`. The named v
 
 - `HTTP_ADDR`: listen address, default `:8080`.
 - `API_PORT`: Docker Compose's localhost host port, default `8080`.
-- `DATABASE_DSN`: SQLite DSN. Its local default is `file:app.db?...`, so `go run ./cmd/api` works without a `/data` directory. Docker Compose and the runtime image default it to `/data/app.db` and retains WAL, foreign keys, and a 5000 ms busy timeout on each connection.
+- `DATABASE_DSN`: SQLite DSN. Its local default is `file:app.db?...`, so `go run ./cmd/api` works without a `/data` directory. Docker Compose and the runtime image default it to `/data/app.db` and retain WAL, foreign keys, and a 5000 ms busy timeout on each connection.
+- `AGENT_MODE`: `auto` (default), `fixture`, or `live_required`. `auto` uses reviewed fixtures when the live provider is unavailable; `live_required` returns the existing 502 envelopes instead.
+- `OPENAI_API_KEY`: an OpenAI API Platform Project or service-account key, injected only into the backend environment. It must have Responses write access, the configured model, and `web_search` enabled for live enrichment.
+- `OPENAI_MODEL`, `OPENAI_BASE_URL`, `OPENAI_TIMEOUT`, and `OPENAI_MAX_RETRIES`: live Responses API settings. See `.env.example`; never commit a real key.
 
 `schema.sql` is the only schema source. It is embedded into the binary and applied idempotently during startup.
 
