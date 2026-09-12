@@ -14,7 +14,7 @@ npm run dev
 VITE_USE_FIXTURES=false
 ```
 
-Vite 會將前端的 `/api/*` 代理至 `http://localhost:8080/*`，並將 simulate 回傳的 `/landing/*` 交由 Go Landing Page 處理。API 路徑、資料型別及事件語意依 `docs/api-contract.md`：CSV import、enrich、generate、approve/reject、simulate、events、reports。
+Vite 會將前端的 `/api/*`、simulate 回傳的 `/landing/*`，以及 Landing Page 使用的 `/events` 代理至 `http://localhost:8080`。API 路徑、資料型別及事件語意依 `docs/api-contract.md`：CSV import、enrich、generate、approve/reject、simulate、events、reports。
 
 ```bash
 npm run build

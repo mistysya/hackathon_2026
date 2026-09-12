@@ -1,4 +1,4 @@
-import { demoCampaign, demoEmployee, demoReport } from "./demo-data";
+import { demoCampaign, demoEmployee } from "./demo-data";
 import type { CampaignReport, Employee, EmployeeProfile, EmployeeSummary, EventType, GeneratedCampaign, ImportResult, Simulation } from "./types";
 
 const useFixtures = import.meta.env.VITE_USE_FIXTURES !== "false";
@@ -34,7 +34,7 @@ const funnelKeyByEvent = {
 } as const satisfies Record<EventType, keyof CampaignReport["funnel"]>;
 let employees: Employee[] = [clone(demoEmployee)];
 let campaign: GeneratedCampaign | null = clone(demoCampaign);
-let report: CampaignReport | null = clone(demoReport);
+let report: CampaignReport | null = null;
 let simulation: Simulation | null = null;
 
 function summary(employee: Employee): EmployeeSummary {

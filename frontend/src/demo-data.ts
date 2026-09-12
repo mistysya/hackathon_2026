@@ -1,4 +1,4 @@
-import type { CampaignReport, Employee, GeneratedCampaign } from "./types";
+import type { Employee, GeneratedCampaign } from "./types";
 
 export const demoEmployee: Employee = {
   employeeId: "E001",
@@ -41,16 +41,4 @@ export const demoCampaign: GeneratedCampaign = {
   approvedBy: null,
   approvedAt: null,
   rejectionReason: null,
-};
-
-export const demoReport: CampaignReport = {
-  campaignId: demoCampaign.campaignId,
-  targetCount: 1,
-  funnel: { simulated: 1, opened: 1, clicked: 1, formAttempted: 1, trainingViewed: 1 },
-  events: [
-    { eventType: "opened", occurredAt: "2026-09-12T14:03:11Z" },
-    { eventType: "clicked", occurredAt: "2026-09-12T14:03:29Z" },
-    { eventType: "form_attempted", occurredAt: "2026-09-12T14:03:52Z" },
-    { eventType: "training_viewed", occurredAt: "2026-09-12T14:03:54Z" },
-  ],
 };

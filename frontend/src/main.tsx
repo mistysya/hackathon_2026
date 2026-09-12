@@ -62,7 +62,6 @@ function App() {
       const list = await api.listEmployees();
       setEmployees(list);
       if (list[0]) await loadEmployee(list[0].employeeId);
-      if (api.usingFixtures) await loadReport(demoCampaign.campaignId);
     });
   }, []);
 
