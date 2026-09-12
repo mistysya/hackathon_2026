@@ -1,0 +1,146 @@
+package domain
+
+import "encoding/json"
+
+type SourceType string
+
+const (
+	SourceTypeLive    SourceType = "live"
+	SourceTypeFixture SourceType = "fixture"
+	SourceTypeManual  SourceType = "manual"
+)
+
+func (value SourceType) Valid() bool {
+	switch value {
+	case SourceTypeLive, SourceTypeFixture, SourceTypeManual:
+		return true
+	default:
+		return false
+	}
+}
+
+type CampaignStatus string
+
+const (
+	CampaignStatusPendingReview CampaignStatus = "pending_review"
+	CampaignStatusApproved      CampaignStatus = "approved"
+	CampaignStatusRejected      CampaignStatus = "rejected"
+	CampaignStatusSimulated     CampaignStatus = "simulated"
+)
+
+func (value CampaignStatus) Valid() bool {
+	switch value {
+	case CampaignStatusPendingReview, CampaignStatusApproved, CampaignStatusRejected, CampaignStatusSimulated:
+		return true
+	default:
+		return false
+	}
+}
+
+type Difficulty string
+
+const (
+	DifficultyLow    Difficulty = "low"
+	DifficultyMedium Difficulty = "medium"
+	DifficultyHigh   Difficulty = "high"
+)
+
+func (value Difficulty) Valid() bool {
+	switch value {
+	case DifficultyLow, DifficultyMedium, DifficultyHigh:
+		return true
+	default:
+		return false
+	}
+}
+
+type Employee struct {
+	EmployeeID  string `json:"employeeId"`
+	DisplayName string `json:"displayName"`
+	Email       string `json:"email"`
+	Department  string `json:"department"`
+	Title       string `json:"title"`
+	Company     string `json:"company"`
+}
+
+type EmployeeSummary struct {
+	EmployeeID  string `json:"employeeId"`
+	DisplayName string `json:"displayName"`
+	Department  string `json:"department"`
+	Title       string `json:"title"`
+	HasProfile  bool   `json:"hasProfile"`
+}
+
+type EmployeeDetails struct {
+	EmployeeID  string           `json:"employeeId"`
+	DisplayName string           `json:"displayName"`
+	Email       string           `json:"email"`
+	Department  string           `json:"department"`
+	Title       string           `json:"title"`
+	Company     string           `json:"company"`
+	Profile     *EmployeeProfile `json:"profile"`
+}
+
+type PublicFact struct {
+	Fact       string     `json:"fact"`
+	SourceURL  *string    `json:"sourceUrl"`
+	Confidence *float64   `json:"confidence"`
+	SourceType SourceType `json:"sourceType"`
+}
+
+type EmployeeProfile struct {
+	EmployeeID          string       `json:"employeeId"`
+	DisplayName         string       `json:"displayName"`
+	Department          string       `json:"department"`
+	PublicFacts         []PublicFact `json:"publicFacts"`
+	RiskSignals         []string     `json:"riskSignals"`
+	RecommendedScenario string       `json:"recommendedScenario"`
+}
+
+func (profile EmployeeProfile) MarshalJSON() ([]byte, error) {
+	type alias EmployeeProfile
+	if profile.PublicFacts == nil {
+		profile.PublicFacts = []PublicFact{}
+	}
+	if profile.RiskSignals == nil {
+		profile.RiskSignals = []string{}
+	}
+	return json.Marshal(alias(profile))
+}
+
+type LandingConfig struct {
+	Title       string `json:"title"`
+	Brand       string `json:"brand"`
+	Description string `json:"description"`
+	CTALabel    string `json:"ctaLabel"`
+}
+
+type SafetyCheck struct {
+	Rule   string  `json:"rule"`
+	Passed bool    `json:"passed"`
+	Detail *string `json:"detail,omitempty"`
+}
+
+type GeneratedCampaign struct {
+	CampaignID      string         `json:"campaignId"`
+	EmployeeID      string         `json:"employeeId"`
+	TemplateID      string         `json:"templateId"`
+	Difficulty      Difficulty     `json:"difficulty"`
+	Subject         string         `json:"subject"`
+	EmailHTML       string         `json:"emailHtml"`
+	LandingConfig   LandingConfig  `json:"landingConfig"`
+	DecisionReason  string         `json:"decisionReason"`
+	SafetyChecks    []SafetyCheck  `json:"safetyChecks"`
+	Status          CampaignStatus `json:"status"`
+	ApprovedBy      *string        `json:"approvedBy"`
+	ApprovedAt      *string        `json:"approvedAt"`
+	RejectionReason *string        `json:"rejectionReason"`
+}
+
+func (campaign GeneratedCampaign) MarshalJSON() ([]byte, error) {
+	type alias GeneratedCampaign
+	if campaign.SafetyChecks == nil {
+		campaign.SafetyChecks = []SafetyCheck{}
+	}
+	return json.Marshal(alias(campaign))
+}
