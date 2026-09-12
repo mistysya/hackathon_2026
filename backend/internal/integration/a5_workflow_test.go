@@ -20,6 +20,7 @@ import (
 	"github.com/mistysya/hackathon_2026/backend/internal/employee"
 	"github.com/mistysya/hackathon_2026/backend/internal/httpapi"
 	"github.com/mistysya/hackathon_2026/backend/internal/profile"
+	"github.com/mistysya/hackathon_2026/backend/internal/roleb"
 	"github.com/mistysya/hackathon_2026/backend/internal/store"
 	"github.com/mistysya/hackathon_2026/backend/internal/structured"
 )
@@ -31,8 +32,8 @@ type errorEnvelope struct {
 	} `json:"error"`
 }
 
-func TestA5WorkflowEndToEnd(t *testing.T) {
-	_, repository := newSQLiteRepository(t)
+func TestFullWorkflowEndToEnd(t *testing.T) {
+	database, repository := newSQLiteRepository(t)
 	validator, err := structured.NewValidator()
 	if err != nil {
 		t.Fatalf("NewValidator: %v", err)
@@ -60,11 +61,13 @@ func TestA5WorkflowEndToEnd(t *testing.T) {
 		validator,
 		campaign.NewCryptoIDGenerator(),
 	), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	roleBRoutes := roleb.NewHandler(roleb.NewRepository(database))
 	server := httptest.NewServer(httpapi.NewRouter(
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 		employeeRoutes,
 		profileRoutes,
 		campaignRoutes,
+		roleBRoutes,
 	))
 	defer server.Close()
 
@@ -125,6 +128,35 @@ func TestA5WorkflowEndToEnd(t *testing.T) {
 	fetchedCampaign := doGetCampaign(t, server, generatedCampaign.CampaignID)
 	if !reflect.DeepEqual(generatedCampaign, fetchedCampaign) {
 		t.Fatalf("campaign mismatch\ngenerated=%#v\nfetched=%#v", generatedCampaign, fetchedCampaign)
+	}
+	if body, status := doRequest(t, server, http.MethodPost, "/campaigns/"+generatedCampaign.CampaignID+"/simulate", "", ""); status != http.StatusConflict {
+		t.Fatalf("simulate before approval status = %d, body=%s", status, body)
+	}
+
+	approvedCampaign := doApproveCampaign(t, server, generatedCampaign.CampaignID, "hr@example.test")
+	if approvedCampaign.Status != domain.CampaignStatusApproved || approvedCampaign.ApprovedBy == nil || *approvedCampaign.ApprovedBy != "hr@example.test" || approvedCampaign.ApprovedAt == nil {
+		t.Fatalf("approved campaign = %#v", approvedCampaign)
+	}
+	duplicateApprovalBody := `{"approvedBy":"hr@example.test"}`
+	if body, status := doRequest(t, server, http.MethodPost, "/campaigns/"+generatedCampaign.CampaignID+"/approve", duplicateApprovalBody, "application/json"); status != http.StatusConflict {
+		t.Fatalf("duplicate approval status = %d, body=%s", status, body)
+	}
+	simulation := doSimulateCampaign(t, server, generatedCampaign.CampaignID)
+	if simulation.Status != domain.CampaignStatusSimulated || len(simulation.Targets) != 1 || simulation.Targets[0].EmployeeID != "E001" {
+		t.Fatalf("simulation = %#v", simulation)
+	}
+	for _, eventType := range []domain.EventType{domain.EventTypeOpened, domain.EventTypeClicked, domain.EventTypeFormAttempted, domain.EventTypeTrainingViewed, domain.EventTypeClicked} {
+		doEventRequest(t, server, simulation.Targets[0].Token, eventType)
+	}
+	report := doCampaignReport(t, server, generatedCampaign.CampaignID)
+	if report.TargetCount != 1 || report.Funnel != (domain.CampaignFunnel{Simulated: 1, Opened: 1, Clicked: 1, FormAttempted: 1, TrainingViewed: 1}) || len(report.Events) != 4 {
+		t.Fatalf("campaign report = %#v", report)
+	}
+
+	rejectedCandidate := doGenerateRequestOK(t, server, "E001")
+	rejectedCampaign := doRejectCampaign(t, server, rejectedCandidate.CampaignID, "內容需調整")
+	if rejectedCampaign.Status != domain.CampaignStatusRejected || rejectedCampaign.RejectionReason == nil || *rejectedCampaign.RejectionReason != "內容需調整" {
+		t.Fatalf("rejected campaign = %#v", rejectedCampaign)
 	}
 
 	duplicateImport := doImportRequest(t, server, importCSV)
@@ -271,6 +303,69 @@ func doGetCampaign(t *testing.T, server *httptest.Server, campaignID string) dom
 		t.Fatalf("decode campaign: %v", err)
 	}
 	return got
+}
+
+func doApproveCampaign(t *testing.T, server *httptest.Server, campaignID, approvedBy string) domain.GeneratedCampaign {
+	t.Helper()
+	body := `{"approvedBy":` + toJSONString(approvedBy) + `}`
+	responseBody, status := doRequest(t, server, http.MethodPost, "/campaigns/"+campaignID+"/approve", body, "application/json")
+	if status != http.StatusOK {
+		t.Fatalf("approve campaign status = %d, body=%s", status, responseBody)
+	}
+	var approved domain.GeneratedCampaign
+	if err := json.Unmarshal([]byte(responseBody), &approved); err != nil {
+		t.Fatalf("decode approved campaign: %v", err)
+	}
+	return approved
+}
+
+func doRejectCampaign(t *testing.T, server *httptest.Server, campaignID, reason string) domain.GeneratedCampaign {
+	t.Helper()
+	body := `{"reason":` + toJSONString(reason) + `}`
+	responseBody, status := doRequest(t, server, http.MethodPost, "/campaigns/"+campaignID+"/reject", body, "application/json")
+	if status != http.StatusOK {
+		t.Fatalf("reject campaign status = %d, body=%s", status, responseBody)
+	}
+	var rejected domain.GeneratedCampaign
+	if err := json.Unmarshal([]byte(responseBody), &rejected); err != nil {
+		t.Fatalf("decode rejected campaign: %v", err)
+	}
+	return rejected
+}
+
+func doSimulateCampaign(t *testing.T, server *httptest.Server, campaignID string) roleb.SimulateResponse {
+	t.Helper()
+	responseBody, status := doRequest(t, server, http.MethodPost, "/campaigns/"+campaignID+"/simulate", "", "")
+	if status != http.StatusOK {
+		t.Fatalf("simulate campaign status = %d, body=%s", status, responseBody)
+	}
+	var simulation roleb.SimulateResponse
+	if err := json.Unmarshal([]byte(responseBody), &simulation); err != nil {
+		t.Fatalf("decode simulation: %v", err)
+	}
+	return simulation
+}
+
+func doEventRequest(t *testing.T, server *httptest.Server, token string, eventType domain.EventType) {
+	t.Helper()
+	body := `{"token":` + toJSONString(token) + `,"eventType":` + toJSONString(string(eventType)) + `}`
+	responseBody, status := doRequest(t, server, http.MethodPost, "/events", body, "application/json")
+	if status != http.StatusNoContent {
+		t.Fatalf("event status = %d, body=%s", status, responseBody)
+	}
+}
+
+func doCampaignReport(t *testing.T, server *httptest.Server, campaignID string) domain.CampaignReport {
+	t.Helper()
+	responseBody, status := doRequest(t, server, http.MethodGet, "/reports/"+campaignID, "", "")
+	if status != http.StatusOK {
+		t.Fatalf("report status = %d, body=%s", status, responseBody)
+	}
+	var report domain.CampaignReport
+	if err := json.Unmarshal([]byte(responseBody), &report); err != nil {
+		t.Fatalf("decode report: %v", err)
+	}
+	return report
 }
 
 func doGetCampaignEnvelope(t *testing.T, server *httptest.Server, campaignID string) errorEnvelope {

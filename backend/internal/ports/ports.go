@@ -17,6 +17,8 @@ type EmployeeRepository interface {
 type CampaignRepository interface {
 	CreateCampaign(context.Context, domain.GeneratedCampaign) error
 	GetCampaign(context.Context, string) (domain.GeneratedCampaign, error)
+	ApproveCampaign(context.Context, string, string) error
+	RejectCampaign(context.Context, string, string) error
 }
 
 type Evidence struct {

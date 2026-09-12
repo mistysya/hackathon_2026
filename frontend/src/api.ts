@@ -1,4 +1,5 @@
 import { demoCampaign, demoEmployee } from "./demo-data";
+import Papa from "papaparse";
 import type { CampaignReport, Employee, EmployeeProfile, EmployeeSummary, EventType, GeneratedCampaign, ImportResult, Simulation } from "./types";
 
 const useFixtures = import.meta.env.VITE_USE_FIXTURES !== "false";
@@ -107,24 +108,30 @@ export const api = {
     if (!useFixtures) {
       return request<ImportResult>("/employees/import", { method: "POST", headers: { "Content-Type": "text/csv" }, body: csv });
     }
-    const rows = csv.replace(/^\uFEFF/, "").trim().split(/\r?\n/);
-    if (rows.length < 2) throw new ApiError("CSV 至少需要標題列與一筆資料", 400);
-    const headers = rows[0].split(",").map((item) => item.trim());
+    const parsed = Papa.parse<string[]>(csv.replace(/^\uFEFF/, ""), { delimiter: ",", skipEmptyLines: false });
+    const [headers = [], ...rows] = parsed.data;
     const required = ["employee_id", "display_name", "email", "department", "title", "company"];
-    if (required.some((field) => !headers.includes(field))) throw new ApiError("CSV 欄位不符合 API 契約", 400);
+    if (parsed.errors.length || headers.length !== required.length || required.some((field, index) => headers[index] !== field)
+      || rows.some((row) => !(row.length === 1 && row[0] === "") && row.length !== required.length)) {
+      throw new ApiError("CSV 欄位或格式不符合 API 契約", 400);
+    }
     const errors: ImportResult["errors"] = [];
     let imported = 0;
-    rows.slice(1).forEach((row, index) => {
-      if (!row.trim()) return;
-      const values = row.split(",").map((item) => item.trim());
+    let nextRow = 2;
+    rows.forEach((row) => {
+      const rowNumber = nextRow;
+      nextRow += 1 + row.reduce((count, field) => count + (field.match(/\n/g)?.length ?? 0), 0);
+      if (row.length === 1 && row[0] === "") return;
+      const values = row.map((item) => item.trim());
       const value = (field: string) => values[headers.indexOf(field)] ?? "";
       const employeeId = value("employee_id");
-      if (!employeeId) {
-        errors.push({ row: index + 2, reason: "employee_id is required" });
+      const missing = ["employee_id", "display_name", "email"].find((field) => !value(field));
+      if (missing) {
+        errors.push({ row: rowNumber, reason: `missing ${missing}` });
         return;
       }
       if (employees.some((item) => item.employeeId === employeeId)) {
-        errors.push({ row: index + 2, reason: "duplicate employee_id" });
+        errors.push({ row: rowNumber, reason: "duplicate employee_id" });
         return;
       }
       employees.push({
@@ -147,7 +154,8 @@ export const api = {
   async generate(employeeId: string): Promise<GeneratedCampaign> {
     if (!useFixtures) return request<GeneratedCampaign>("/campaigns/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ employeeId }) });
     const employee = employees.find((item) => item.employeeId === employeeId);
-    if (!employee?.profile) throw new ApiError("請先建立 Profile", 409);
+    if (!employee) throw new ApiError("找不到該員工", 404);
+    if (!employee.profile) throw new ApiError("請先建立 Profile", 409);
     campaign = fixtureCampaign(employee);
     report = null;
     simulation = null;
@@ -158,14 +166,16 @@ export const api = {
     if (!useFixtures) return request<GeneratedCampaign>(`/campaigns/${encodeURIComponent(campaignId)}/approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ approvedBy }) });
     if (!campaign || campaign.campaignId !== campaignId || campaign.status !== "pending_review") throw new ApiError("Campaign 目前不可核准", 409);
     if (!campaign.safetyChecks.length || campaign.safetyChecks.some((check) => !check.passed)) throw new ApiError("安全規則尚未全部通過，Campaign 不可核准", 409);
-    campaign = { ...campaign, status: "approved", approvedBy, approvedAt: now() };
+    if (!approvedBy.trim()) throw new ApiError("approvedBy is required", 400);
+    campaign = { ...campaign, status: "approved", approvedBy: approvedBy.trim(), approvedAt: now() };
     return clone(campaign);
   },
 
   async reject(campaignId: string, reason: string): Promise<GeneratedCampaign> {
     if (!useFixtures) return request<GeneratedCampaign>(`/campaigns/${encodeURIComponent(campaignId)}/reject`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) });
     if (!campaign || campaign.campaignId !== campaignId || campaign.status !== "pending_review") throw new ApiError("Campaign 目前不可拒絕", 409);
-    campaign = { ...campaign, status: "rejected", rejectionReason: reason };
+    if (!reason.trim()) throw new ApiError("reason is required", 400);
+    campaign = { ...campaign, status: "rejected", rejectionReason: reason.trim() };
     return clone(campaign);
   },
 
@@ -181,6 +191,7 @@ export const api = {
 
   async recordEvent(token: string, eventType: EventType): Promise<void> {
     if (!useFixtures) return request<void>("/events", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, eventType }) });
+    if (!Object.hasOwn(funnelKeyByEvent, eventType)) throw new ApiError("Invalid eventType", 400);
     if (!simulation || !report || !simulation.targets.some((item) => item.token === token)) throw new ApiError("無效 tracking token", 404);
     if (!report.events.some((event) => event.eventType === eventType)) {
       report.events.push({ eventType, occurredAt: now() });

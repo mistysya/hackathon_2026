@@ -8,7 +8,7 @@ services:
       HTTP_ADDR: ":8080"
       DATABASE_DSN: "file:/data/app.db?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${API_PORT:-8080}:8080"
     volumes:
       - .:/workspace/backend
       - go-mod-cache:/go/pkg/mod

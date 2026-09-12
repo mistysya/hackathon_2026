@@ -156,6 +156,40 @@ func TestServiceGetMapsNotFound(t *testing.T) {
 	}
 }
 
+func TestServiceApproveAndReject(t *testing.T) {
+	safeCampaign := reviewableCampaign(t, "c_safe")
+	repository := &fakeCampaignRepository{created: []domain.GeneratedCampaign{safeCampaign}}
+	service := NewService(&fakeEmployeeRepository{}, repository, &fakeScenarioAgent{}, &fakeValidator{}, fixedID)
+
+	approved, err := service.Approve(context.Background(), safeCampaign.CampaignID, " hr@example.test ")
+	if err != nil {
+		t.Fatalf("Approve() error = %v", err)
+	}
+	if approved.Status != domain.CampaignStatusApproved || approved.ApprovedBy == nil || *approved.ApprovedBy != "hr@example.test" || approved.ApprovedAt == nil {
+		t.Fatalf("approved campaign = %+v", approved)
+	}
+	if _, err := service.Reject(context.Background(), safeCampaign.CampaignID, "too late"); !errors.Is(err, ErrInvalidCampaignStatus) {
+		t.Fatalf("Reject(approved) error = %v, want ErrInvalidCampaignStatus", err)
+	}
+
+	rejectable := reviewableCampaign(t, "c_reject")
+	repository.created = append(repository.created, rejectable)
+	rejected, err := service.Reject(context.Background(), rejectable.CampaignID, " 內容需調整 ")
+	if err != nil {
+		t.Fatalf("Reject() error = %v", err)
+	}
+	if rejected.Status != domain.CampaignStatusRejected || rejected.RejectionReason == nil || *rejected.RejectionReason != "內容需調整" {
+		t.Fatalf("rejected campaign = %+v", rejected)
+	}
+
+	unsafe := reviewableCampaign(t, "c_unsafe")
+	unsafe.SafetyChecks[0].Passed = false
+	repository.created = append(repository.created, unsafe)
+	if _, err := service.Approve(context.Background(), unsafe.CampaignID, "hr@example.test"); !errors.Is(err, ErrInvalidCampaignStatus) {
+		t.Fatalf("Approve(unsafe) error = %v, want ErrInvalidCampaignStatus", err)
+	}
+}
+
 func TestRoutesFrozenHTTPContract(t *testing.T) {
 	valid := rawScenario(t)
 	profile := &domain.EmployeeProfile{EmployeeID: "E001", DisplayName: "Demo User", Department: "Engineering", RecommendedScenario: "training_reminder"}
@@ -260,6 +294,20 @@ func TestRoutesGetSuccessAndGenerationFailure(t *testing.T) {
 	})
 }
 
+func reviewableCampaign(t *testing.T, campaignID string) domain.GeneratedCampaign {
+	t.Helper()
+	output, err := decodeScenario(rawScenario(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return domain.GeneratedCampaign{
+		CampaignID: campaignID, EmployeeID: "E001", TemplateID: output.TemplateID,
+		Difficulty: output.Difficulty, Subject: output.Subject, EmailHTML: output.EmailHTML,
+		LandingConfig: output.LandingConfig, DecisionReason: output.DecisionReason,
+		SafetyChecks: output.SafetyChecks, Status: domain.CampaignStatusPendingReview,
+	}
+}
+
 func rawScenario(t *testing.T) []byte {
 	t.Helper()
 	agent, err := NewFixtureScenarioAgent()
@@ -319,6 +367,34 @@ func (repository *fakeCampaignRepository) GetCampaign(_ context.Context, campaig
 		}
 	}
 	return domain.GeneratedCampaign{}, store.ErrNotFound
+}
+func (repository *fakeCampaignRepository) ApproveCampaign(_ context.Context, campaignID, approvedBy string) error {
+	for index := range repository.created {
+		if repository.created[index].CampaignID == campaignID {
+			if repository.created[index].Status != domain.CampaignStatusPendingReview {
+				return store.ErrConflict
+			}
+			repository.created[index].Status = domain.CampaignStatusApproved
+			repository.created[index].ApprovedBy = &approvedBy
+			approvedAt := "2026-09-12T14:03:11Z"
+			repository.created[index].ApprovedAt = &approvedAt
+			return nil
+		}
+	}
+	return store.ErrNotFound
+}
+func (repository *fakeCampaignRepository) RejectCampaign(_ context.Context, campaignID, reason string) error {
+	for index := range repository.created {
+		if repository.created[index].CampaignID == campaignID {
+			if repository.created[index].Status != domain.CampaignStatusPendingReview {
+				return store.ErrConflict
+			}
+			repository.created[index].Status = domain.CampaignStatusRejected
+			repository.created[index].RejectionReason = &reason
+			return nil
+		}
+	}
+	return store.ErrNotFound
 }
 
 type fakeScenarioAgent struct {

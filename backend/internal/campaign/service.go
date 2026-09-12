@@ -117,6 +117,45 @@ func (service *Service) Get(ctx context.Context, campaignID string) (domain.Gene
 	return campaign, nil
 }
 
+func (service *Service) Approve(ctx context.Context, campaignID, approvedBy string) (domain.GeneratedCampaign, error) {
+	campaign, err := service.Get(ctx, campaignID)
+	if err != nil {
+		return domain.GeneratedCampaign{}, err
+	}
+	if campaign.Status != domain.CampaignStatusPendingReview || validateSafetyChecks(campaign.SafetyChecks) != nil {
+		return domain.GeneratedCampaign{}, ErrInvalidCampaignStatus
+	}
+	if err := service.campaignRepository.ApproveCampaign(ctx, campaignID, strings.TrimSpace(approvedBy)); err != nil {
+		return domain.GeneratedCampaign{}, mapCampaignTransitionError("approve", err)
+	}
+	return service.Get(ctx, campaignID)
+}
+
+func (service *Service) Reject(ctx context.Context, campaignID, reason string) (domain.GeneratedCampaign, error) {
+	campaign, err := service.Get(ctx, campaignID)
+	if err != nil {
+		return domain.GeneratedCampaign{}, err
+	}
+	if campaign.Status != domain.CampaignStatusPendingReview {
+		return domain.GeneratedCampaign{}, ErrInvalidCampaignStatus
+	}
+	if err := service.campaignRepository.RejectCampaign(ctx, campaignID, strings.TrimSpace(reason)); err != nil {
+		return domain.GeneratedCampaign{}, mapCampaignTransitionError("reject", err)
+	}
+	return service.Get(ctx, campaignID)
+}
+
+func mapCampaignTransitionError(action string, err error) error {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		return ErrCampaignNotFound
+	case errors.Is(err, store.ErrConflict):
+		return ErrInvalidCampaignStatus
+	default:
+		return fmt.Errorf("%s campaign: %w", action, err)
+	}
+}
+
 func employeeFromDetails(details domain.EmployeeDetails) domain.Employee {
 	return domain.Employee{EmployeeID: details.EmployeeID, DisplayName: details.DisplayName, Email: details.Email, Department: details.Department, Title: details.Title, Company: details.Company}
 }

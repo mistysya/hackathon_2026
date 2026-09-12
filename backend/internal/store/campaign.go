@@ -55,6 +55,48 @@ func (repository *Repository) CreateCampaign(ctx context.Context, campaign domai
 	return nil
 }
 
+func (repository *Repository) ApproveCampaign(ctx context.Context, campaignID, approvedBy string) error {
+	result, err := repository.db.ExecContext(ctx, `
+		UPDATE campaigns
+		SET status = 'approved', approved_by = ?, approved_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+		WHERE id = ? AND status = 'pending_review'
+	`, approvedBy, campaignID)
+	if err != nil {
+		return fmt.Errorf("approve campaign %q: %w", campaignID, mapError(err))
+	}
+	return repository.requireTransitionApplied(ctx, result, campaignID)
+}
+
+func (repository *Repository) RejectCampaign(ctx context.Context, campaignID, reason string) error {
+	result, err := repository.db.ExecContext(ctx, `
+		UPDATE campaigns
+		SET status = 'rejected', rejection_reason = ?
+		WHERE id = ? AND status = 'pending_review'
+	`, reason, campaignID)
+	if err != nil {
+		return fmt.Errorf("reject campaign %q: %w", campaignID, mapError(err))
+	}
+	return repository.requireTransitionApplied(ctx, result, campaignID)
+}
+
+func (repository *Repository) requireTransitionApplied(ctx context.Context, result sql.Result, campaignID string) error {
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("campaign transition rows affected: %w", err)
+	}
+	if rows == 1 {
+		return nil
+	}
+	var exists int
+	if err := repository.db.QueryRowContext(ctx, `SELECT 1 FROM campaigns WHERE id = ?`, campaignID).Scan(&exists); err != nil {
+		if err == sql.ErrNoRows {
+			return ErrNotFound
+		}
+		return fmt.Errorf("check campaign %q after transition: %w", campaignID, err)
+	}
+	return ErrConflict
+}
+
 func (repository *Repository) GetCampaign(ctx context.Context, campaignID string) (domain.GeneratedCampaign, error) {
 	var campaign domain.GeneratedCampaign
 	var landingConfigJSON string
