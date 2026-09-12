@@ -1,0 +1,17 @@
+{
+  "campaignId": "c_9f2c8a1b4d7e4f30a1b2c3d4e5f60718",
+  "targetCount": 1,
+  "funnel": {
+    "simulated": 1,
+    "opened": 1,
+    "clicked": 1,
+    "formAttempted": 1,
+    "trainingViewed": 1
+  },
+  "events": [
+    { "eventType": "opened", "occurredAt": "2026-09-12T14:03:11Z" },
+    { "eventType": "clicked", "occurredAt": "2026-09-12T14:03:29Z" },
+    { "eventType": "form_attempted", "occurredAt": "2026-09-12T14:03:52Z" },
+    { "eventType": "training_viewed", "occurredAt": "2026-09-12T14:03:54Z" }
+  ]
+}

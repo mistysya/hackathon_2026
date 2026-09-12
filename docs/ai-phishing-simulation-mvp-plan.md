@@ -1,5 +1,8 @@
 # AI 個人化釣魚演練平台：MVP 設計與執行規劃
 
+> ⚠️ **實作契約以 `docs/api-contract.md` 與 `backend/schema.sql` 為準（Frozen）。**
+> 本文件為背景規劃，其中的型別、Campaign 狀態、TrackingEvent 形狀、API 範例若與上述二份不一致，一律以上述二份為準，不得作為實作依據。
+>
 > 文件狀態：Draft for Hackathon MVP
 >
 > 建立日期：2026-09-12
