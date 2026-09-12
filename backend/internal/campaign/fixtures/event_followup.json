@@ -1,0 +1,15 @@
+{
+  "templateId": "event_followup",
+  "difficulty": "medium",
+  "subject": "Follow up on your security event registration",
+  "emailHtml": "<p>Hello {{.DisplayName}},</p><p>Your security event follow-up is ready.</p><p><a href=\"__LANDING_URL__\">Open training preview</a></p>",
+  "landingConfig": {"title":"Security event follow-up","brand":"Security Awareness Demo","description":"A safe training preview for a security event follow-up.","ctaLabel":"Open training"},
+  "decisionReason": "The profile recommends a safe event follow-up training scenario.",
+  "safetyChecks": [
+    {"rule":"no_real_credentials_requested","passed":true},
+    {"rule":"no_sensitive_personal_data","passed":true},
+    {"rule":"no_unsourced_personal_facts","passed":true},
+    {"rule":"no_prohibited_impersonation","passed":true},
+    {"rule":"cta_points_to_controlled_domain","passed":true}
+  ]
+}

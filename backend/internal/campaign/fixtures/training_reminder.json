@@ -1,0 +1,15 @@
+{
+  "templateId": "training_reminder",
+  "difficulty": "low",
+  "subject": "Complete your security awareness training reminder",
+  "emailHtml": "<p>Hello {{.DisplayName}},</p><p>This is a safe reminder to review security awareness training.</p><p><a href=\"__LANDING_URL__\">Review training</a></p>",
+  "landingConfig": {"title":"Security awareness reminder","brand":"Security Awareness Demo","description":"A safe security awareness training reminder.","ctaLabel":"Review training"},
+  "decisionReason": "The profile has no allowlisted recommendation, so the safe training reminder is used.",
+  "safetyChecks": [
+    {"rule":"no_real_credentials_requested","passed":true},
+    {"rule":"no_sensitive_personal_data","passed":true},
+    {"rule":"no_unsourced_personal_facts","passed":true},
+    {"rule":"no_prohibited_impersonation","passed":true},
+    {"rule":"cta_points_to_controlled_domain","passed":true}
+  ]
+}

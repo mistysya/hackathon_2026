@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["templateId", "difficulty", "subject", "emailHtml", "landingConfig", "decisionReason", "safetyChecks"],
+  "properties": {
+    "templateId": { "$ref": "#/$defs/nonBlankString" },
+    "difficulty": { "enum": ["low", "medium", "high"] },
+    "subject": { "$ref": "#/$defs/nonBlankString" },
+    "emailHtml": { "$ref": "#/$defs/nonBlankString" },
+    "landingConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "brand", "description", "ctaLabel"],
+      "properties": {
+        "title": { "$ref": "#/$defs/nonBlankString" },
+        "brand": { "$ref": "#/$defs/nonBlankString" },
+        "description": { "$ref": "#/$defs/nonBlankString" },
+        "ctaLabel": { "$ref": "#/$defs/nonBlankString" }
+      }
+    },
+    "decisionReason": { "$ref": "#/$defs/nonBlankString" },
+    "safetyChecks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rule", "passed"],
+        "properties": {
+          "rule": { "$ref": "#/$defs/nonBlankString" },
+          "passed": { "type": "boolean" },
+          "detail": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nonBlankString": { "type": "string", "pattern": ".*\\S.*" }
+  }
+}

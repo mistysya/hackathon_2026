@@ -1,0 +1,15 @@
+{
+  "templateId": "benefit_update",
+  "difficulty": "medium",
+  "subject": "Review the security awareness benefits update",
+  "emailHtml": "<p>Hello {{.DisplayName}},</p><p>A safe benefits-update training preview is available.</p><p><a href=\"__LANDING_URL__\">Open preview</a></p>",
+  "landingConfig": {"title":"Benefits update training","brand":"Security Awareness Demo","description":"A safe benefits-update security training preview.","ctaLabel":"Open preview"},
+  "decisionReason": "The profile recommends a controlled benefits-update training scenario.",
+  "safetyChecks": [
+    {"rule":"no_real_credentials_requested","passed":true},
+    {"rule":"no_sensitive_personal_data","passed":true},
+    {"rule":"no_unsourced_personal_facts","passed":true},
+    {"rule":"no_prohibited_impersonation","passed":true},
+    {"rule":"cta_points_to_controlled_domain","passed":true}
+  ]
+}
