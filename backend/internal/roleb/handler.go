@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/mistysya/hackathon_2026/backend/internal/httpapi"
 )
 
 type Handler struct {
@@ -32,7 +33,7 @@ func (h *Handler) Routes() http.Handler {
 func (h *Handler) GetLanding(w http.ResponseWriter, r *http.Request) {
 	data, err := h.repo.LandingPage(r.Context(), chi.URLParam(r, "token"))
 	if err != nil {
-		writeMappedError(w, err, "landing_not_found", "landing token not found")
+		writeMappedError(w, r, err, "landing_not_found", "landing token not found")
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -46,11 +47,11 @@ func (h *Handler) PostEvent(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", "invalid JSON request")
+		httpapi.WriteError(w, r, http.StatusBadRequest, "invalid_json", "invalid JSON request")
 		return
 	}
 	if err := h.repo.RecordEvent(r.Context(), req); err != nil {
-		writeMappedError(w, err, "event_not_found", "tracking token not found")
+		writeMappedError(w, r, err, "event_not_found", "tracking token not found")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -59,22 +60,22 @@ func (h *Handler) PostEvent(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PostSimulate(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.repo.SimulateCampaign(r.Context(), chi.URLParam(r, "id"))
 	if err != nil {
-		writeMappedError(w, err, "campaign_not_found", "campaign not found")
+		writeMappedError(w, r, err, "campaign_not_found", "campaign not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func writeMappedError(w http.ResponseWriter, err error, notFoundCode, notFoundMessage string) {
+func writeMappedError(w http.ResponseWriter, r *http.Request, err error, notFoundCode, notFoundMessage string) {
 	switch {
 	case errors.Is(err, ErrNotFound), errors.Is(err, ErrInvalidToken):
-		writeError(w, http.StatusNotFound, notFoundCode, notFoundMessage)
+		httpapi.WriteError(w, r, http.StatusNotFound, notFoundCode, notFoundMessage)
 	case errors.Is(err, ErrInvalidEvent):
-		writeError(w, http.StatusBadRequest, "invalid_event", "eventType must be one of opened, clicked, form_attempted, training_viewed")
+		httpapi.WriteError(w, r, http.StatusBadRequest, "invalid_event", "eventType must be one of opened, clicked, form_attempted, training_viewed")
 	case errors.Is(err, ErrConflict):
-		writeError(w, http.StatusConflict, "invalid_campaign_status", "campaign must be approved before simulate")
+		httpapi.WriteError(w, r, http.StatusConflict, "invalid_campaign_status", "campaign must be approved before simulate")
 	default:
-		writeError(w, http.StatusInternalServerError, "internal_error", "unexpected server error")
+		httpapi.WriteError(w, r, http.StatusInternalServerError, "internal_error", "unexpected server error")
 	}
 }
 
@@ -82,10 +83,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, status int, code, message string) {
-	writeJSON(w, status, ErrorResponse{Error: ErrorBody{Code: code, Message: message, RequestID: "local-dev"}})
 }
 
 var landingTemplate = template.Must(template.New("landing").Parse(`<!doctype html>

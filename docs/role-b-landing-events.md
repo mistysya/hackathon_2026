@@ -21,10 +21,10 @@ go test ./...
 go run ./cmd/api
 ```
 
-預設使用 `backend/schema.sql` 初始化 SQLite，DB DSN 可用環境變數覆寫：
+Role B routes 透過 Role A 的共用 Router、Middleware 與 SQLite lifecycle 啟動。Schema 由 Go embed 初始化，DB DSN 可用環境變數覆寫：
 
 ```bash
-DB_DSN='file:app.db?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)' go run ./cmd/api
+DATABASE_DSN='file:app.db?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)' go run ./cmd/api
 ```
 
 ## 安全邊界
