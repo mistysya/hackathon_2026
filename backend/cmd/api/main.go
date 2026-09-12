@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/mistysya/hackathon_2026/backend/internal/httpapi"
+	"github.com/mistysya/hackathon_2026/backend/internal/roleb"
 	"github.com/mistysya/hackathon_2026/backend/internal/store"
 )
 
@@ -30,9 +31,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// The repository is the shared foundation for future route registrars.
-	// Business routes are intentionally not registered in this phase.
+	// Role A owns the shared process and database lifecycle. Feature handlers
+	// register their routes with the shared router and middleware stack.
 	_ = store.New(database)
+	roleBHandler := roleb.NewHandler(roleb.NewRepository(database))
 
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -40,7 +42,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := httpapi.NewServer(address, httpapi.NewRouter(logger))
+	server := httpapi.NewServer(address, httpapi.NewRouter(logger, roleBHandler))
 	logger.Info("api listening", "address", listener.Addr().String())
 	if err := httpapi.Serve(ctx, server, listener, httpapi.DefaultShutdownTimeout); err != nil {
 		logger.Error("api stopped", "error", err)
