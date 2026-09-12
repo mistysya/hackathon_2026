@@ -2,6 +2,18 @@
 
 This directory contains the Go, HTTP, and SQLite backend for the hackathon MVP. It includes the fixture-only employee import/query, profile enrichment, and campaign generation workflow.
 
+## Run locally
+
+Requires Go 1.27.1+. From this directory:
+
+```sh
+go run ./cmd/api
+go test -race ./...
+go vet ./...
+```
+
+For the complete local frontend/backend demo, run `bash scripts/demo.sh` from the repository root and follow [the demo guide](../README.md).
+
 ## Run with Docker
 
 ```sh

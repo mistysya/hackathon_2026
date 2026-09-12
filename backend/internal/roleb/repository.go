@@ -84,22 +84,29 @@ func (r *Repository) SimulateCampaign(ctx context.Context, campaignID string) (S
 	}
 	defer tx.Rollback()
 
-	var status, employeeID string
-	if err := tx.QueryRowContext(ctx, `SELECT status, employee_id FROM campaigns WHERE id = ?`, campaignID).Scan(&status, &employeeID); err != nil {
+	// Acquire the write lock before reading. A deferred read-then-write
+	// transaction can fail with SQLITE_BUSY when two simulations race.
+	result, err := tx.ExecContext(ctx, `UPDATE campaigns SET status = 'simulated' WHERE id = ? AND status = 'approved'`, campaignID)
+	if err != nil {
+		return SimulateResponse{}, err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return SimulateResponse{}, err
+	}
+	var employeeID string
+	if err := tx.QueryRowContext(ctx, `SELECT employee_id FROM campaigns WHERE id = ?`, campaignID).Scan(&employeeID); err != nil {
 		if err == sql.ErrNoRows {
 			return SimulateResponse{}, ErrNotFound
 		}
 		return SimulateResponse{}, err
 	}
-	if status != "approved" {
+	if changed != 1 {
 		return SimulateResponse{}, ErrConflict
 	}
 
 	token, err := newToken()
 	if err != nil {
-		return SimulateResponse{}, err
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE campaigns SET status = 'simulated' WHERE id = ?`, campaignID); err != nil {
 		return SimulateResponse{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `

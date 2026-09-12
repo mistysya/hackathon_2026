@@ -142,8 +142,8 @@ var landingTemplate = template.Must(template.New("landing").Parse(`<!doctype htm
 </main>
 <script>
 (function () {
-  const token = {{printf "%q" .Token}};
-  const endpoint = {{printf "%q" .EventEndpoint}};
+  const token = {{.Token}};
+  const endpoint = {{.EventEndpoint}};
   function sendEvent(eventType) {
     return fetch(endpoint, {
       method: "POST",

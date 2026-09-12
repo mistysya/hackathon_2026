@@ -6,6 +6,8 @@
 # Frontend build artifacts
 frontend/node_modules/
 frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
 
 # TypeScript incremental metadata
 *.tsbuildinfo

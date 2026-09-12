@@ -111,6 +111,8 @@ func TestLandingPageRecordsClickedOnlyAndRevealsEducationOnSubmit(t *testing.T) 
 	}
 	html := res.Body.String()
 	checks := []string{
+		`const token = "tok_demo";`,
+		`const endpoint = "/events";`,
 		"sendEvent(\"clicked\")",
 		"sendEvent(\"form_attempted\")",
 		"sendEvent(\"training_viewed\")",
