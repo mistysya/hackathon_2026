@@ -1,3 +1,4 @@
 employee_id,display_name,email,department,title,company
 E001,Demo User,demo.user@example.test,Engineering,Software Engineer,Demo Corp
 E002,Alex Chen,alex.chen@example.test,Product,Product Manager,Demo Corp
+E003,Arthur Tseng,arthur.tseng@example.test,Quant Engineering,Software Engineer,Quant Industry Demo
