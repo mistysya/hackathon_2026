@@ -1,5 +1,7 @@
 # SimSafe presentation guide
 
+> **Pitch-deck source:** [`SimSafe_3min_pitch.md`](SimSafe_3min_pitch.md) is the concise English, six-slide / three-minute presentation brief. Its `assets/` images are actual end-to-end demo captures.
+
 ## Part 1 — Live demo
 
 ### Start the demo
