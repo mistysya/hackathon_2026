@@ -52,7 +52,7 @@ Environment: macOS arm64, Go **1.27.1**, Node **26.8.2**, npm **11.19.1**, Playw
 
 ## Limitations / not certified
 
-- Docker commands could not be exercised: the local Docker daemon is not running. Native execution is verified.
+- Docker was subsequently validated using Colima: containerized Go tests/race checks/vet passed, Compose and non-root runtime each passed 6/6 repeated browser/API tests, and named-volume persistence survived container recreation. This found and fixed the runtime image's unwritable default SQLite path. See [Docker validation](docker-validation.md) for results, commands, and architecture scope.
 - An optional GitHub Actions template is provided at `docs/ci/demo-regression.yml`; it is not enabled or verified on GitHub. The publishing token lacks `workflow` scope. A maintainer with workflow permissions can copy it to `.github/workflows/test.yml`.
 - Browser execution was tested in Chromium, not every browser or device.
 - Live LLM generation, external search, real email delivery, authentication, and production deployment are outside this fixture-backed MVP and were not tested.

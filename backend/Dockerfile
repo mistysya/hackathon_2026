@@ -20,6 +20,9 @@ RUN useradd --system --uid 10001 --create-home api
 
 RUN mkdir -p /data && chown api:api /data
 
+# Keep SQLite and its WAL/SHM files in the directory writable by the runtime user.
+ENV DATABASE_DSN="file:/data/app.db?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+
 WORKDIR /app
 COPY --from=build /out/api /usr/local/bin/api
 

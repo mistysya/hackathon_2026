@@ -61,7 +61,7 @@ Playwright launches the actual Go executable with an isolated in-memory SQLite d
 
 An optional GitHub Actions template is available at `docs/ci/demo-regression.yml`. A maintainer with workflow permissions can enable it by copying it to `.github/workflows/test.yml`; CI is not enabled by this PR.
 
-More details: [validation report](docs/demo-validation.md), [API contract](docs/api-contract.md), [backend setup](backend/README.md), [frontend setup](frontend/README.md).
+More details: [validation report](docs/demo-validation.md), [Docker/Colima validation](docs/docker-validation.md), [API contract](docs/api-contract.md), [backend setup](backend/README.md), [frontend setup](frontend/README.md).
 
 ## Safety / scope
 
