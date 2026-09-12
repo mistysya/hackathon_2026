@@ -32,6 +32,7 @@ function App() {
   const [report, setReport] = useState<CampaignReport | null>(null);
   const [emailOpened, setEmailOpened] = useState(false);
   const [landingOpen, setLandingOpen] = useState(false);
+  const [trainingRevealed, setTrainingRevealed] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState("準備好開始安全演練。");
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +85,7 @@ function App() {
   });
   const generate = () => selected && run("generate", async () => {
     const next = await api.generate(selected.employeeId);
-    setCampaign(next); setSimulation(null); setReport(null); setEmailOpened(false); setLandingOpen(false);
+    setCampaign(next); setSimulation(null); setReport(null); setEmailOpened(false); setLandingOpen(false); setTrainingRevealed(false);
     setNotice("Agent 已建立受控情境，等待管理者人工審核。");
   });
   const approve = () => campaign && run("approve", async () => {
@@ -99,7 +100,7 @@ function App() {
   });
   const simulate = () => campaign && run("simulate", async () => {
     const next = await api.simulate(campaign.campaignId);
-    setSimulation(next); setCampaign({ ...campaign, status: "simulated" }); setEmailOpened(false); setLandingOpen(false);
+    setSimulation(next); setCampaign({ ...campaign, status: "simulated" }); setEmailOpened(false); setLandingOpen(false); setTrainingRevealed(false);
     await loadReport(campaign.campaignId);
     setNotice("已建立不含個資的 tracking token，現在可切換至員工視角。");
   });
@@ -108,11 +109,23 @@ function App() {
     if (campaign) await loadReport(campaign.campaignId);
     after?.();
   });
+  const openFixtureLanding = () => activeTarget && run("fixture-landing", async () => {
+    await api.recordEvent(activeTarget.token, "clicked");
+    if (campaign) await loadReport(campaign.campaignId);
+    setLandingOpen(true);
+    setTrainingRevealed(false);
+  });
+  const submitFixtureLanding = () => activeTarget && run("fixture-training", async () => {
+    await api.recordEvent(activeTarget.token, "form_attempted");
+    setTrainingRevealed(true);
+    await api.recordEvent(activeTarget.token, "training_viewed");
+    if (campaign) await loadReport(campaign.campaignId);
+  });
 
   const maximum = report?.targetCount || 1;
   const funnel = report ? [
     ["模擬寄送", report.funnel.simulated], ["開啟信件", report.funnel.opened], ["點擊 CTA", report.funnel.clicked],
-    ["表單嘗試", report.funnel.form_attempted], ["教育頁閱讀", report.funnel.training_viewed],
+    ["表單嘗試", report.funnel.formAttempted], ["教育頁閱讀", report.funnel.trainingViewed],
   ] : [];
 
   return <main className="app-shell">
@@ -135,7 +148,47 @@ function App() {
 
       <section id="review" className="panel review-panel"><div className="panel-heading"><div><p className="eyebrow">02 / HUMAN REVIEW</p><h2>Agent 決策與內容審核</h2></div>{campaign && <span className={`status ${campaign.status}`}>{statusText[campaign.status]}</span>}</div>{campaign ? <div className="review-grid"><div><div className="decision"><span className="icon">✦</span><div><p className="eyebrow">RECOMMENDED SCENARIO</p><h3>{campaign.templateId} <span className="difficulty">{campaign.difficulty}</span></h3><p>{campaign.decisionReason}</p></div></div><div className="checks"><h4>安全規則檢查</h4>{campaign.safetyChecks.map((check) => <div key={check.rule}><span>{check.passed ? "✓" : "!"}</span><code>{check.rule}</code><small>{check.passed ? "passed" : check.detail ?? "failed"}</small></div>)}</div><div className="review-actions">{campaign.status === "pending_review" && <><button className="danger-outline" onClick={reject} disabled={busy === "reject"}>拒絕</button><button onClick={approve} disabled={busy === "approve"}>核准 Campaign</button></>}{campaign.status === "approved" && <button onClick={simulate} disabled={busy === "simulate"}>{busy === "simulate" ? "建立 token 中…" : "模擬寄送 →"}</button>}{campaign.status === "simulated" && <span className="success-text">✓ 已建立受控 Landing URL</span>}{campaign.status === "rejected" && <span className="rejected-text">拒絕原因：{campaign.rejectionReason}</span>}</div></div><div className="preview"><div className="preview-header"><span>信件預覽</span><b>Subject: {campaign.subject}</b></div><iframe title="安全信件預覽" sandbox="allow-popups" srcDoc={emailDocument} /></div><div className="landing-card"><p className="eyebrow">LANDING PAGE PREVIEW</p><h3>{campaign.landingConfig.brand}</h3><h4>{campaign.landingConfig.title}</h4><p>{campaign.landingConfig.description}</p><button disabled>{campaign.landingConfig.ctaLabel}</button><small>測試品牌 · Dummy Form · 不收集帳密</small></div></div> : <div className="empty large">先完成 Profile 後，建立可人工核准的 Campaign。</div>}</section>
 
-      <section id="simulation" className="panel simulation-panel"><div className="panel-heading"><div><p className="eyebrow">03 / EMPLOYEE VIEW</p><h2>模擬信件與受控 Landing</h2></div>{activeTarget && <code className="token">token · {activeTarget.token.slice(0, 10)}…</code>}</div>{campaign?.status === "simulated" && activeTarget ? <div className="simulation-grid"><div><p>以員工視角查看信件時才記錄 <code>opened</code>，點擊 CTA 後才記錄 <code>clicked</code>。</p><button onClick={() => record("opened", () => setEmailOpened(true))} disabled={Boolean(busy)}>{emailOpened ? "✓ 已開啟信件" : "開啟模擬信件"}</button>{emailOpened && <div className="mail-preview"><b>{campaign.subject}</b><iframe title="員工信件視角" sandbox="allow-popups" srcDoc={emailDocument} /><div className="actions"><button className="secondary" onClick={() => record("clicked", () => setLandingOpen(true))}>模擬點擊 CTA</button><a href={activeTarget.landingUrl} target="_blank" rel="noreferrer">在 Landing 開啟 ↗</a></div></div>}</div><div className={`training-card ${landingOpen ? "visible" : ""}`}>{landingOpen ? <><p className="eyebrow">CONTROLLED LANDING</p><h3>{campaign.landingConfig.title}</h3><p>{campaign.landingConfig.description}</p><form onSubmit={(event) => { event.preventDefault(); record("form_attempted", () => record("training_viewed")); }}><input aria-label="Dummy email" placeholder="這是 Dummy Form（內容不會送出）" /><button type="submit" disabled={Boolean(busy)}>{campaign.landingConfig.ctaLabel}</button></form><p className="privacy">🔒 不傳送、不保存任何表單原始輸入值。</p></> : <div className="empty large">點擊 CTA 後顯示 Landing Page 與教育揭露。</div>}</div></div> : <div className="empty large">需先由管理者核准並模擬寄送，才能切換員工視角。</div>}</section>
+      <section id="simulation" className="panel simulation-panel">
+        <div className="panel-heading"><div><p className="eyebrow">03 / EMPLOYEE VIEW</p><h2>模擬信件與受控 Landing</h2></div>{activeTarget && <code className="token">token · {activeTarget.token.slice(0, 10)}…</code>}</div>
+        {campaign?.status === "simulated" && activeTarget ? <div className="simulation-grid">
+          <div>
+            <p>以員工視角查看信件時才記錄 <code>opened</code>；其餘事件由 Landing Page 依互動階段記錄。</p>
+            <button onClick={() => record("opened", () => setEmailOpened(true))} disabled={Boolean(busy)}>{emailOpened ? "✓ 已開啟信件" : "開啟模擬信件"}</button>
+            {emailOpened && <div className="mail-preview">
+              <b>{campaign.subject}</b>
+              <iframe title="員工信件視角" sandbox="allow-popups" srcDoc={emailDocument} />
+              <div className="actions">
+                {api.usingFixtures
+                  ? <button className="secondary" onClick={openFixtureLanding}>模擬點擊 CTA</button>
+                  : <a href={activeTarget.landingUrl} target="_blank" rel="noreferrer">開啟受控 Landing ↗</a>}
+              </div>
+            </div>}
+          </div>
+          <div className={`training-card ${landingOpen || !api.usingFixtures ? "visible" : ""}`}>
+            {api.usingFixtures ? landingOpen ? <>
+              <p className="eyebrow">CONTROLLED LANDING</p>
+              <h3>{campaign.landingConfig.title}</h3>
+              {trainingRevealed ? <div className="notice">
+                <h4>這是一場受控資安演練</h4>
+                <p>輸入資料前，請確認寄件者、網址與需求是否合理，並避免在不受信任的頁面輸入密碼、MFA 或金融資料。</p>
+                <p className="privacy">本次演練只記錄互動事件，不保存表單輸入值。</p>
+              </div> : <>
+                <p>{campaign.landingConfig.description}</p>
+                <form onSubmit={(event) => { event.preventDefault(); void submitFixtureLanding(); }}>
+                  <input aria-label="Dummy email" placeholder="這是 Dummy Form（內容不會送出）" />
+                  <button type="submit" disabled={Boolean(busy)}>{campaign.landingConfig.ctaLabel}</button>
+                </form>
+                <p className="privacy">🔒 不傳送、不保存任何表單原始輸入值。</p>
+              </>}
+            </> : <div className="empty large">點擊 CTA 後顯示 Landing Page 與教育揭露。</div> : <>
+              <p className="eyebrow">ROLE B LANDING</p>
+              <h3>Landing 互動由 Go 頁面處理</h3>
+              <p>受控頁面載入時記錄 <code>clicked</code>，提交 Dummy Form 後依序記錄 <code>form_attempted</code> 與 <code>training_viewed</code>。</p>
+              <a href={activeTarget.landingUrl} target="_blank" rel="noreferrer">開啟受控 Landing ↗</a>
+            </>}
+          </div>
+        </div> : <div className="empty large">需先由管理者核准並模擬寄送，才能切換員工視角。</div>}
+      </section>
 
       <section id="dashboard" className="panel dashboard"><div className="panel-heading"><div><p className="eyebrow">04 / REPORTING</p><h2>演練成效 Dashboard</h2></div>{report && <button className="secondary" onClick={() => campaign && void run("report", () => loadReport(campaign.campaignId))}>重新整理</button>}</div>{report ? <><div className="metrics">{funnel.map(([label, value]) => <div key={label} className="metric"><span>{label}</span><b>{value}</b><small>{Math.round((Number(value) / maximum) * 100)}% of targets</small></div>)}</div><div className="report-grid"><div className="funnel-chart"><h3>轉換漏斗</h3>{funnel.map(([label, value]) => <div className="bar-row" key={label}><span>{label}</span><div><i style={{ width: `${Math.max((Number(value) / maximum) * 100, Number(value) ? 10 : 0)}%` }} /></div><b>{value}/{maximum}</b></div>)}</div><div className="timeline"><h3>事件時間軸</h3>{report.events.length ? report.events.map((event, index) => <div className="event" key={`${event.eventType}-${event.occurredAt}`}><span>{index + 1}</span><div><b>{eventText[event.eventType]}</b><small>{formatDate(event.occurredAt)}</small></div></div>) : <p className="empty">尚未有互動事件。</p>}</div></div><p className="dashboard-note">開信為參考指標；點擊與頁面互動更能反映演練成效。所有數字均為 distinct target 計數。</p></> : <div className="empty large">完成模擬寄送後，Dashboard 會顯示漏斗與事件時間軸。</div>}</section>
     </section>

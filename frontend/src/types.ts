@@ -55,7 +55,13 @@ export type Simulation = { campaignId: string; status: "simulated"; targets: Tar
 export type CampaignReport = {
   campaignId: string;
   targetCount: number;
-  funnel: Record<"simulated" | EventType, number>;
+  funnel: {
+    simulated: number;
+    opened: number;
+    clicked: number;
+    formAttempted: number;
+    trainingViewed: number;
+  };
   events: Array<{ eventType: EventType; occurredAt: string }>;
 };
 

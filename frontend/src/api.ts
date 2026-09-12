@@ -26,6 +26,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+const funnelKeyByEvent = {
+  opened: "opened",
+  clicked: "clicked",
+  form_attempted: "formAttempted",
+  training_viewed: "trainingViewed",
+} as const satisfies Record<EventType, keyof CampaignReport["funnel"]>;
 let employees: Employee[] = [clone(demoEmployee)];
 let campaign: GeneratedCampaign | null = clone(demoCampaign);
 let report: CampaignReport | null = clone(demoReport);
@@ -128,8 +134,9 @@ export const api = {
     if (!useFixtures) return request<Simulation>(`/campaigns/${encodeURIComponent(campaignId)}/simulate`, { method: "POST" });
     if (!campaign || campaign.campaignId !== campaignId || campaign.status !== "approved") throw new ApiError("未核准的 Campaign 不可模擬寄送", 409);
     campaign = { ...campaign, status: "simulated" };
-    simulation = { campaignId, status: "simulated", targets: [{ employeeId: campaign.employeeId, token: crypto.randomUUID().replaceAll("-", ""), landingUrl: "/landing/demo-token" }] };
-    report = { campaignId, targetCount: 1, funnel: { simulated: 1, opened: 0, clicked: 0, form_attempted: 0, training_viewed: 0 }, events: [] };
+    const token = crypto.randomUUID().replaceAll("-", "");
+    simulation = { campaignId, status: "simulated", targets: [{ employeeId: campaign.employeeId, token, landingUrl: `/landing/${token}` }] };
+    report = { campaignId, targetCount: 1, funnel: { simulated: 1, opened: 0, clicked: 0, formAttempted: 0, trainingViewed: 0 }, events: [] };
     return clone(simulation);
   },
 
@@ -138,7 +145,7 @@ export const api = {
     if (!simulation || !report || !simulation.targets.some((item) => item.token === token)) throw new ApiError("無效 tracking token", 404);
     if (!report.events.some((event) => event.eventType === eventType)) {
       report.events.push({ eventType, occurredAt: now() });
-      report.funnel[eventType] += 1;
+      report.funnel[funnelKeyByEvent[eventType]] += 1;
     }
   },
 

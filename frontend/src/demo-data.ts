@@ -46,7 +46,7 @@ export const demoCampaign: GeneratedCampaign = {
 export const demoReport: CampaignReport = {
   campaignId: demoCampaign.campaignId,
   targetCount: 1,
-  funnel: { simulated: 1, opened: 1, clicked: 1, form_attempted: 1, training_viewed: 1 },
+  funnel: { simulated: 1, opened: 1, clicked: 1, formAttempted: 1, trainingViewed: 1 },
   events: [
     { eventType: "opened", occurredAt: "2026-09-12T14:03:11Z" },
     { eventType: "clicked", occurredAt: "2026-09-12T14:03:29Z" },
