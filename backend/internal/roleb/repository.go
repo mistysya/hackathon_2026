@@ -84,22 +84,31 @@ func (r *Repository) SimulateCampaign(ctx context.Context, campaignID string) (S
 	}
 	defer tx.Rollback()
 
-	var status, employeeID string
-	if err := tx.QueryRowContext(ctx, `SELECT status, employee_id FROM campaigns WHERE id = ?`, campaignID).Scan(&status, &employeeID); err != nil {
-		if err == sql.ErrNoRows {
-			return SimulateResponse{}, ErrNotFound
-		}
-		return SimulateResponse{}, err
-	}
-	if status != "approved" {
-		return SimulateResponse{}, ErrConflict
-	}
-
-	token, err := newToken()
+	result, err := tx.ExecContext(ctx, `UPDATE campaigns SET status = 'simulated' WHERE id = ? AND status = 'approved'`, campaignID)
 	if err != nil {
 		return SimulateResponse{}, err
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE campaigns SET status = 'simulated' WHERE id = ?`, campaignID); err != nil {
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return SimulateResponse{}, err
+	}
+	if rows != 1 {
+		var exists int
+		if err := tx.QueryRowContext(ctx, `SELECT 1 FROM campaigns WHERE id = ?`, campaignID).Scan(&exists); err != nil {
+			if err == sql.ErrNoRows {
+				return SimulateResponse{}, ErrNotFound
+			}
+			return SimulateResponse{}, err
+		}
+		return SimulateResponse{}, ErrConflict
+	}
+
+	var employeeID string
+	if err := tx.QueryRowContext(ctx, `SELECT employee_id FROM campaigns WHERE id = ?`, campaignID).Scan(&employeeID); err != nil {
+		return SimulateResponse{}, err
+	}
+	token, err := newToken()
+	if err != nil {
 		return SimulateResponse{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `

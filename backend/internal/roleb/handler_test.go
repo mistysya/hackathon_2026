@@ -61,6 +61,17 @@ func TestSimulateCreatesOpaqueTokenAndLandingURL(t *testing.T) {
 	if len(token) != 32 || strings.Contains(token, "E001") {
 		t.Fatalf("token should be 32 hex chars and contain no employee id, got %q", token)
 	}
+
+	duplicateReq := httptest.NewRequest(http.MethodPost, "/campaigns/c_demo/simulate", nil)
+	duplicateRes := httptest.NewRecorder()
+	handler.ServeHTTP(duplicateRes, duplicateReq)
+	if duplicateRes.Code != http.StatusConflict {
+		t.Fatalf("duplicate simulation status = %d body=%s", duplicateRes.Code, duplicateRes.Body.String())
+	}
+	var targetCount int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM campaign_targets WHERE campaign_id = 'c_demo'`).Scan(&targetCount); err != nil || targetCount != 1 {
+		t.Fatalf("target count = %d, error = %v", targetCount, err)
+	}
 }
 
 func TestPostEventsIsIdempotentAndDoesNotStoreFormValues(t *testing.T) {
