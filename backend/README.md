@@ -12,9 +12,12 @@ The server listens on `http://localhost:8080`. The integrated endpoints are:
 
 - `POST /employees/import`, `GET /employees`, and `GET /employees/{id}`
 - `POST /employees/{id}/enrich`
-- `POST /campaigns/generate` and `GET /campaigns/{id}`
+- `POST /campaigns/generate`, `GET /campaigns/{id}`, `POST /campaigns/{id}/approve`, and `POST /campaigns/{id}/reject`
+- `POST /campaigns/{id}/simulate`
+- `GET /landing/{token}` and `POST /events`
+- `GET /reports/{campaignId}`
 
-Unimplemented frozen-contract endpoints return the JSON `404 not_found` envelope.
+Together these endpoints provide the complete fixture-only training flow from employee import through reporting.
 
 ## Verify
 

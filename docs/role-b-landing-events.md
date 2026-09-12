@@ -10,6 +10,7 @@
   - 顯示揭露／教育內容後送 `training_viewed`。
   - 不在 landing 頁送 `opened`，保留給信件預覽畫面觸發。
 - `POST /events`：接受 `{ "token": "...", "eventType": "clicked" }`，以 token 反查 target 並 `INSERT OR IGNORE`，確保同一 target 同一事件只記一次。
+- `POST /campaigns/{id}/approve` / `reject`：由整合後的 Campaign service 執行 frozen 狀態轉換並回傳完整 Campaign。
 - `POST /campaigns/{id}/simulate`：approved campaign 產生 32-hex tracking token，建立 target，回傳 `/landing/{token}`。
 - `GET /reports/{campaignId}`：依 distinct target 彙整漏斗並回傳事件時間軸。
 
@@ -22,7 +23,7 @@ cd backend
 go test ./...
 ```
 
-Role B 的 Handler 實作 `httpapi.RouteRegistrar`，不直接擁有 `cmd/api` composition root。最終由 backend integration branch 將 Role B Handler 傳入共用 Router，並共用 Middleware、SQLite lifecycle 與 Go embedded schema。
+Role B 的 Handler 實作 `httpapi.RouteRegistrar`，由本 PR 的 final integration composition root 傳入共用 Router，並與 Employee、Profile、Campaign routes 共用 Middleware、SQLite lifecycle 與 Go embedded schema。
 
 ## 安全邊界
 
