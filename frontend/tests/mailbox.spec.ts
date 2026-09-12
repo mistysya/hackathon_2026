@@ -4,7 +4,7 @@ const csv = "employee_id,display_name,email,department,title,company\nE001,Demo 
 
 async function generateCampaign(page: Page) {
   const response = page.waitForResponse(r => r.url().endsWith("/campaigns/generate"));
-  await page.getByRole("button", { name: "生成安全演練" }).click();
+  await page.getByRole("button", { name: "Generate exercise" }).click();
   return (await response).json() as Promise<{ campaignId: string }>;
 }
 
@@ -17,14 +17,14 @@ async function prepareCampaign(page: Page) {
 
 async function openMailbox(page: Page) {
   const popup = page.waitForEvent("popup");
-  await page.getByRole("button", { name: "開啟員工信箱 ↗" }).click();
+  await page.getByRole("button", { name: "Open employee mailbox ↗" }).click();
   return popup;
 }
 
 async function simulate(page: Page) {
-  await page.getByRole("button", { name: "核准 Campaign", exact: true }).click();
-  await page.getByRole("button", { name: "模擬寄送 →", exact: true }).click();
-  await expect(page.locator("#review .status")).toHaveText("已模擬寄送");
+  await page.getByRole("button", { name: "Approve campaign", exact: true }).click();
+  await page.getByRole("button", { name: "Simulate delivery →", exact: true }).click();
+  await expect(page.locator("#review .status")).toHaveText("Simulated delivery");
 }
 
 async function deliver(page: Page) {
@@ -58,7 +58,7 @@ test("mailbox completes the real API workflow and deduplicates reopened mail", a
   expect(JSON.stringify(eventBodies)).not.toContain("DO_NOT_TRANSMIT");
   await mailbox.locator("#backButton").click();
   await mailbox.locator(".mail-row").first().click();
-  await page.getByRole("button", { name: "重新整理", exact: true }).click();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.locator(".metric b")).toHaveText(["1", "1", "1", "1", "1"]);
   expect((await report(page, campaignId)).events).toHaveLength(4);
 });
@@ -87,10 +87,10 @@ test("failed opened writes are retried until acknowledged", async ({ page }) => 
 test("older campaign opens are persisted without changing the active campaign", async ({ page }) => {
   const { mailbox, campaignId } = await deliver(page);
   await generateCampaign(page);
-  await expect(page.locator("#review .status")).toHaveText("等待人工審核");
+  await expect(page.locator("#review .status")).toHaveText("Pending review");
   await mailbox.locator(".mail-row").first().click();
   await expect.poll(async () => (await report(page, campaignId)).funnel.opened).toBe(1);
-  await expect(page.locator("#review .status")).toHaveText("等待人工審核");
+  await expect(page.locator("#review .status")).toHaveText("Pending review");
   await expect(page.locator(".metric")).toHaveCount(0);
 });
 
@@ -103,10 +103,10 @@ test("slow mailbox initialization waits for readiness and confirms delivery", as
     const mailbox = await openMailbox(page);
     await simulate(page);
     await page.waitForTimeout(1600);
-    await expect(page.locator(".alert.info")).toContainText("等待信箱確認收件");
+    await expect(page.locator(".alert.info")).toContainText("awaiting delivery confirmation");
     release();
     await expect(mailbox.locator(".mail-row")).toHaveCount(14);
-    await expect(page.locator(".alert.info")).toContainText("新郵件已送達");
+    await expect(page.locator(".alert.info")).toContainText("new email was delivered");
     await page.waitForTimeout(1200);
     await expect(mailbox.locator(".mail-row")).toHaveCount(14);
   } finally {
@@ -125,7 +125,7 @@ test("missing delivery ACK retries the same message without duplicating it", asy
     });
   });
   const { mailbox } = await deliver(page);
-  await expect(page.locator(".alert.info")).toContainText("新郵件已送達");
+  await expect(page.locator(".alert.info")).toContainText("new email was delivered");
   await expect(mailbox.locator(".mail-row")).toHaveCount(14);
   expect(await page.evaluate(() => (window as any).__droppedAck)).toBe(true);
 });
@@ -141,7 +141,7 @@ test("late-opened, reloaded and reopened mailboxes replay existing targets witho
   await mailbox.locator(".mail-row").first().click();
   await expect.poll(async () => (await report(page, campaignId)).funnel.opened).toBe(1);
   // Clicking the admin entry again focuses the existing view instead of clearing it.
-  await page.getByRole("button", { name: "開啟員工信箱 ↗" }).click();
+  await page.getByRole("button", { name: "Open employee mailbox ↗" }).click();
   await expect(mailbox.locator("#messagePanel")).toBeVisible();
   await mailbox.reload();
   await expect(mailbox.locator(".mail-row")).toHaveCount(14);

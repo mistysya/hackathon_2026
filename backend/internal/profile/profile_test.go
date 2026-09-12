@@ -81,7 +81,7 @@ func TestFixtureAgentPreservesIdentityAndSources(t *testing.T) {
 	if len(profile.PublicFacts) != 1 || profile.PublicFacts[0].SourceURL == nil || *profile.PublicFacts[0].SourceURL != url || profile.PublicFacts[0].Confidence == nil || *profile.PublicFacts[0].Confidence != confidence {
 		t.Fatalf("source metadata was not preserved: %+v", profile.PublicFacts)
 	}
-	if len(profile.RiskSignals) != 1 || !strings.Contains(profile.RiskSignals[0], "可能") {
+	if len(profile.RiskSignals) != 1 || !strings.Contains(profile.RiskSignals[0], "May") {
 		t.Fatalf("event risk signal = %#v, want cautious language", profile.RiskSignals)
 	}
 }

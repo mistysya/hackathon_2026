@@ -12,10 +12,10 @@ export const demoEmployee: Employee = {
     displayName: "Demo User",
     department: "Engineering",
     publicFacts: [
-      { fact: "近期參加公開 AI 資安技術研討會", sourceUrl: "https://example.com/event/ai-security-workshop", confidence: 0.88, sourceType: "fixture" },
-      { fact: "於公開技術部落格分享後端開發文章", sourceUrl: "https://example.com/blog/demo-user", confidence: 0.72, sourceType: "fixture" },
+      { fact: "Recently attended a public AI security workshop", sourceUrl: "https://example.com/event/ai-security-workshop", confidence: 0.88, sourceType: "fixture" },
+      { fact: "Published a backend engineering article on a public technical blog", sourceUrl: "https://example.com/blog/demo-user", confidence: 0.72, sourceType: "fixture" },
     ],
-    riskSignals: ["可能較容易受到活動通知類演練情境影響", "可能會點擊與技術研討會相關的後續通知"],
+    riskSignals: ["May be more responsive to an exercise themed around event notifications", "May click a follow-up notification related to a technical workshop"],
     recommendedScenario: "event_followup",
   },
 };
@@ -25,10 +25,10 @@ export const demoCampaign: GeneratedCampaign = {
   employeeId: "E001",
   templateId: "event_followup",
   difficulty: "medium",
-  subject: "【提醒】AI 資安研討會後續問卷與資料下載",
-  emailHtml: '<html><body><p>Hi Demo User,</p><p>感謝參加本次 AI 資安研討會。請於下方連結填寫問卷並下載簡報。</p><p><a href="{{landingUrl}}">前往問卷與資料下載</a></p><p>Demo Corp 教育訓練小組（測試品牌）</p></body></html>',
-  landingConfig: { title: "AI 資安研討會後續問卷", brand: "Demo Corp Training (測試品牌)", description: "請填寫以下欄位以取得研討會簡報。", ctaLabel: "送出並下載" },
-  decisionReason: "員工公開資料顯示近期參加 AI 資安研討會，event_followup 情境與其職務及公開活動高度吻合。",
+  subject: "Reminder: AI Security Workshop Follow-up Survey and Materials",
+  emailHtml: '<html><body><p>Hi Demo User,</p><p>Thank you for attending the AI security workshop. Complete the survey and download the materials using the link below.</p><p><a href="{{landingUrl}}">Open survey and materials</a></p><p>Demo Corp Training Team (test brand)</p></body></html>',
+  landingConfig: { title: "AI Security Workshop Follow-up Survey", brand: "Demo Corp Training (test brand)", description: "Complete the form below to receive the workshop materials.", ctaLabel: "Submit and download" },
+  decisionReason: "The employee's public profile shows recent AI security workshop participation, making the event_followup scenario relevant to their role and public activity.",
   safetyChecks: [
     { rule: "no_real_credentials_requested", passed: true },
     { rule: "no_sensitive_personal_data", passed: true },

@@ -72,6 +72,25 @@ func TestNewRouterMountsFullFixtureWorkflow(t *testing.T) {
 	}
 }
 
+func TestNewRouterAutoWithoutLiveConfigUsesFixtures(t *testing.T) {
+	database, _ := newSQLiteRepository(t)
+	router, err := NewRouter(database, slog.New(slog.NewTextHandler(io.Discard, nil)), openaiapi.Config{Mode: openaiapi.ModeAuto}, nil)
+	if err != nil {
+		t.Fatalf("NewRouter: %v", err)
+	}
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	doImportRequest(t, server, "employee_id,display_name,email,department,title,company\nE001,Demo User,demo@example.test,Engineering,Engineer,Demo Corp\n")
+	profile := doEnrichRequest(t, server, "E001")
+	if len(profile.PublicFacts) == 0 || profile.PublicFacts[0].SourceType != domain.SourceTypeFixture {
+		t.Fatalf("profile facts=%#v want fixture-backed facts", profile.PublicFacts)
+	}
+	if campaign := doGenerateRequestOK(t, server, "E001"); campaign.Status != domain.CampaignStatusPendingReview {
+		t.Fatalf("campaign=%#v", campaign)
+	}
+}
+
 func TestNewRouterAutoUsesLiveResponsesAndFallsBack(t *testing.T) {
 	for _, test := range []struct {
 		name       string

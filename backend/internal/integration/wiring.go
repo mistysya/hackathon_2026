@@ -50,24 +50,20 @@ func NewRouter(database *sql.DB, logger *slog.Logger, agentConfig openaiapi.Conf
 	var profileAdapter ports.EnrichmentAdapter = fixtureAdapter
 	var profileAgent ports.ProfileAgent = fixtureProfileAgent
 	var scenarioAgent ports.ScenarioAgent = fixtureScenarioAgent
-	if config.Mode != openaiapi.ModeFixture {
-		var client openaiapi.Client
-		if config.LiveReady() {
-			client, err = openaiapi.NewHTTPClient(config, httpClient)
-			if err != nil && config.Mode == openaiapi.ModeLiveRequired {
-				return nil, fmt.Errorf("initialize live OpenAI client: %w", err)
-			}
-		} else if config.Mode == openaiapi.ModeLiveRequired {
+	if config.Mode == openaiapi.ModeLiveRequired {
+		if !config.LiveReady() {
 			return nil, fmt.Errorf("initialize live OpenAI client: API key and model are required")
 		}
-		if config.Mode == openaiapi.ModeLiveRequired {
-			if client == nil {
-				return nil, fmt.Errorf("initialize live OpenAI client")
-			}
-			profileAdapter = profile.NewOpenAIEnrichmentAdapter(client)
-			profileAgent = profile.NewOpenAIProfileAgent(client)
-			scenarioAgent = campaign.NewOpenAIScenarioAgent(client)
-		} else {
+		client, err := openaiapi.NewHTTPClient(config, httpClient)
+		if err != nil {
+			return nil, fmt.Errorf("initialize live OpenAI client: %w", err)
+		}
+		profileAdapter = profile.NewOpenAIEnrichmentAdapter(client)
+		profileAgent = profile.NewOpenAIProfileAgent(client)
+		scenarioAgent = campaign.NewOpenAIScenarioAgent(client)
+	} else if config.Mode == openaiapi.ModeAuto && config.LiveReady() {
+		client, clientErr := openaiapi.NewHTTPClient(config, httpClient)
+		if clientErr == nil {
 			profileAdapter = profile.WithEnrichmentFallback(config.Mode, profile.NewOpenAIEnrichmentAdapter(client), fixtureAdapter)
 			profileAgent = profile.WithProfileFallback(config.Mode, profile.NewOpenAIProfileAgent(client), fixtureProfileAgent)
 			scenarioAgent = campaign.WithScenarioFallback(config.Mode, campaign.NewOpenAIScenarioAgent(client), fixtureScenarioAgent)
