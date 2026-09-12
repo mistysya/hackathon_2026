@@ -34,31 +34,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   outline-offset: 2px;
 }
 
-.demo-bar {
-  position: relative;
-  z-index: 30;
-  min-height: 34px;
-  padding: 7px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: #3c4043;
-  background: #eaf1fb;
-  font-size: 12px;
-  letter-spacing: .01em;
-}
-.demo-bar strong { color: #1f1f1f; }
-.demo-bar__pulse {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #34a853;
-  box-shadow: 0 0 0 4px rgba(52, 168, 83, .12);
-}
-
 .mail-shell {
-  min-height: calc(100vh - 34px);
+  min-height: 100vh;
   display: grid;
   grid-template: 66px 1fr / 238px 1fr;
 }
@@ -132,7 +109,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .sidebar {
   position: sticky;
   top: 66px;
-  height: calc(100vh - 100px);
+  height: calc(100vh - 66px);
   padding: 20px 14px 16px;
   display: flex;
   flex-direction: column;
@@ -206,7 +183,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .storage__track span { display: block; width: 14%; height: 100%; background: #6d8fe1; }
 
 .mail-main { min-width: 0; background: #fff; }
-.inbox-panel, .message-panel { min-height: calc(100vh - 100px); }
+.inbox-panel, .message-panel { min-height: calc(100vh - 66px); }
 .mail-toolbar, .message-toolbar {
   height: 50px;
   padding: 0 22px;
@@ -365,9 +342,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 
 @media (max-width: 640px) {
-  .demo-bar { justify-content: flex-start; padding-inline: 12px; }
-  .demo-bar span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mail-shell { display: block; min-height: calc(100vh - 34px); }
+  .mail-shell { display: block; min-height: 100vh; }
   .topbar { height: 60px; grid-template-columns: auto 1fr auto; gap: 8px; padding: 0 10px; }
   .mobile-menu { display: flex; flex-direction: column; gap: 3px; }
   .mobile-menu span { width: 15px; height: 1.5px; background: #617087; }
@@ -375,7 +350,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   .search { height: 38px; }
   .search kbd { display: none; }
   .topbar__actions .icon-button { display: none; }
-  .sidebar { position: fixed; z-index: 50; top: 94px; left: 0; width: 238px; height: calc(100vh - 94px); padding: 18px 14px; box-shadow: 12px 0 35px rgba(28, 39, 62, .14); transform: translateX(-105%); transition: transform .22s ease; }
+  .sidebar { position: fixed; z-index: 50; top: 60px; left: 0; width: 238px; height: calc(100vh - 60px); padding: 18px 14px; box-shadow: 12px 0 35px rgba(28, 39, 62, .14); transform: translateX(-105%); transition: transform .22s ease; }
   .sidebar.is-open { transform: translateX(0); }
   .compose { width: 153px; margin-inline: 5px; font-size: 14px; }
   .folders .folder { grid-template-columns: 22px 1fr auto; justify-items: initial; padding: 0 12px; }
