@@ -1,15 +1,14 @@
 package profile
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/mistysya/hackathon_2026/backend/internal/domain"
+	"github.com/mistysya/hackathon_2026/backend/internal/jsonutil"
 	"github.com/mistysya/hackathon_2026/backend/internal/ports"
 )
 
@@ -73,16 +72,7 @@ func decodeEvidence(data []byte) ([]ports.Evidence, error) {
 		SourceType domain.SourceType `json:"sourceType"`
 		Tags       []string          `json:"tags"`
 	}
-	decoder := json.NewDecoder(strings.NewReader(string(data)))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&records); err != nil {
-		return nil, err
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return nil, fmt.Errorf("trailing JSON value")
-		}
+	if err := jsonutil.DecodeStrict(bytes.NewReader(data), &records); err != nil {
 		return nil, err
 	}
 

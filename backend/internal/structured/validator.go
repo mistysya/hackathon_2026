@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 
+	"github.com/mistysya/hackathon_2026/backend/internal/jsonutil"
 	"github.com/mistysya/hackathon_2026/backend/internal/ports"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -81,18 +81,16 @@ func validate(schema *jsonschema.Schema, raw []byte) error {
 }
 
 func decodeSingleDocument(raw []byte) (any, error) {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var document any
-	if err := decoder.Decode(&document); err != nil {
+	document, err := jsonutil.DecodeSingle(raw)
+	if err != nil {
 		var syntaxError *json.SyntaxError
 		if errors.As(err, &syntaxError) {
 			return nil, fmt.Errorf("invalid structured JSON at byte %d", syntaxError.Offset)
 		}
+		if errors.Is(err, jsonutil.ErrTrailingJSON) {
+			return nil, errors.New("invalid structured JSON: trailing content")
+		}
 		return nil, errors.New("invalid structured JSON")
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return nil, errors.New("invalid structured JSON: trailing content")
 	}
 	return document, nil
 }

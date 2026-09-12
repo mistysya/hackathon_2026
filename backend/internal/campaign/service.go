@@ -19,6 +19,10 @@ var requiredSafetyRules = map[string]struct{}{
 	"cta_points_to_controlled_domain": {},
 }
 
+var allowedTemplateIDs = map[string]struct{}{
+	"event_followup": {}, "training_reminder": {}, "benefit_update": {}, "saas_security_notice": {},
+}
+
 type Service struct {
 	employeeRepository ports.EmployeeRepository
 	campaignRepository ports.CampaignRepository
@@ -118,7 +122,7 @@ func employeeFromDetails(details domain.EmployeeDetails) domain.Employee {
 }
 
 func validateScenarioPolicy(output scenarioOutput) error {
-	if _, ok := allowedTemplateIDs()[output.TemplateID]; !ok {
+	if _, ok := allowedTemplateIDs[output.TemplateID]; !ok {
 		return fmt.Errorf("template is not allowlisted")
 	}
 	if !output.Difficulty.Valid() {
@@ -136,10 +140,6 @@ func validateScenarioPolicy(output scenarioOutput) error {
 		return fmt.Errorf("email lacks landing URL placeholder")
 	}
 	return validateSafetyChecks(output.SafetyChecks)
-}
-
-func allowedTemplateIDs() map[string]struct{} {
-	return map[string]struct{}{"event_followup": {}, "training_reminder": {}, "benefit_update": {}, "saas_security_notice": {}}
 }
 
 func validateSafetyChecks(checks []domain.SafetyCheck) error {

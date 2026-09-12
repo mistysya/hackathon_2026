@@ -48,6 +48,19 @@ func TestImportCSVParsesAllRowsBeforeWriting(t *testing.T) {
 	}
 }
 
+func TestImportCSVAcceptsUTF8BOMHeader(t *testing.T) {
+	t.Parallel()
+	repository := &fakeRepository{imported: []bool{true}}
+	response, err := NewService(repository).ImportCSV(context.Background(), strings.NewReader(
+		"\ufeffemployee_id,display_name,email,department,title,company\nE010,Jane,jane@example.test,,,\n"))
+	if err != nil {
+		t.Fatalf("ImportCSV() error = %v", err)
+	}
+	if response.Imported != 1 || response.Skipped != 0 {
+		t.Fatalf("ImportCSV() response = %#v", response)
+	}
+}
+
 func TestImportCSVRejectsInvalidSyntaxBeforeWriting(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

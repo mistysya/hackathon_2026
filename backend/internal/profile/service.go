@@ -3,12 +3,11 @@ package profile
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 
 	"github.com/mistysya/hackathon_2026/backend/internal/domain"
+	"github.com/mistysya/hackathon_2026/backend/internal/jsonutil"
 	"github.com/mistysya/hackathon_2026/backend/internal/ports"
 	"github.com/mistysya/hackathon_2026/backend/internal/store"
 )
@@ -87,17 +86,8 @@ func decodeProfile(raw []byte) (domain.EmployeeProfile, error) {
 	if len(bytes.TrimSpace(raw)) == 0 || bytes.TrimSpace(raw)[0] != '{' {
 		return domain.EmployeeProfile{}, fmt.Errorf("profile must be a JSON object")
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
 	var profile domain.EmployeeProfile
-	if err := decoder.Decode(&profile); err != nil {
-		return domain.EmployeeProfile{}, err
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return domain.EmployeeProfile{}, fmt.Errorf("trailing JSON value")
-		}
+	if err := jsonutil.DecodeStrict(bytes.NewReader(raw), &profile); err != nil {
 		return domain.EmployeeProfile{}, err
 	}
 	return profile, nil

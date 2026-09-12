@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/mistysya/hackathon_2026/backend/internal/httpapi"
+	"github.com/mistysya/hackathon_2026/backend/internal/jsonutil"
 )
 
 type Routes struct {
@@ -71,18 +72,6 @@ func decodeEmptyObject(body io.Reader) error {
 	if len(trimmed) == 0 || trimmed[0] != '{' {
 		return errors.New("body is not an object")
 	}
-	decoder := json.NewDecoder(bytes.NewReader(trimmed))
-	decoder.DisallowUnknownFields()
 	var payload struct{}
-	if err := decoder.Decode(&payload); err != nil {
-		return err
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return errors.New("trailing JSON value")
-		}
-		return err
-	}
-	return nil
+	return jsonutil.DecodeStrict(bytes.NewReader(trimmed), &payload)
 }

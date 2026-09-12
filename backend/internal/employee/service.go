@@ -57,6 +57,9 @@ func (service *Service) ImportCSV(ctx context.Context, input io.Reader) (ImportR
 	reader := csv.NewReader(input)
 
 	header, err := reader.Read()
+	if len(header) > 0 {
+		header[0] = strings.TrimPrefix(header[0], "\ufeff")
+	}
 	if err != nil || !sameFields(header, employeeCSVHeader) {
 		return ImportResponse{}, invalidCSVError(err)
 	}
@@ -74,9 +77,6 @@ func (service *Service) ImportCSV(ctx context.Context, input io.Reader) (ImportR
 		}
 
 		row, _ := reader.FieldPos(0)
-		if len(record) != len(employeeCSVHeader) {
-			return ImportResponse{}, invalidCSVError(fmt.Errorf("wrong number of fields"))
-		}
 		employee, reason := employeeFromRecord(record)
 		if reason != "" {
 			errorsByRow = append(errorsByRow, RowError{Row: row, Reason: reason})

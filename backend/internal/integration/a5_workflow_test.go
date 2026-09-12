@@ -136,6 +136,15 @@ func TestA5WorkflowEndToEnd(t *testing.T) {
 		t.Fatalf("list employees after duplicate = %#v", summaries)
 	}
 
+	emptyDepartmentImport := doImportRequest(t, server, "employee_id,display_name,email,department,title,company\nE010,Jane,jane@example.test,,,\n")
+	if emptyDepartmentImport.Imported != 1 || emptyDepartmentImport.Skipped != 0 {
+		t.Fatalf("empty-department import result = %#v", emptyDepartmentImport)
+	}
+	emptyDepartmentProfile := doEnrichRequest(t, server, "E010")
+	if emptyDepartmentProfile.Department != "" || emptyDepartmentProfile.RecommendedScenario != "training_reminder" {
+		t.Fatalf("empty-department profile = %#v", emptyDepartmentProfile)
+	}
+
 	unknownGen := doGenerateRequestEnvelope(t, server, "E999")
 	if unknownGen.Error.Code != "employee_not_found" || unknownGen.Error.RequestID == "" {
 		t.Fatalf("unknown employee envelope = %#v", unknownGen)

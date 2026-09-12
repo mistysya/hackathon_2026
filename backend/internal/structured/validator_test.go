@@ -17,6 +17,14 @@ func TestValidatorAcceptsFrozenShapes(t *testing.T) {
 	}
 }
 
+func TestValidatorAcceptsAnEmptyOptionalDepartment(t *testing.T) {
+	validator := newValidator(t)
+	profileWithEmptyDepartment := strings.Replace(validProfile, `"department":"Engineering"`, `"department":""`, 1)
+	if err := validator.ValidateProfile([]byte(profileWithEmptyDepartment)); err != nil {
+		t.Fatalf("ValidateProfile() with empty department: %v", err)
+	}
+}
+
 func TestValidatorRejectsInvalidProfileOutput(t *testing.T) {
 	validator := newValidator(t)
 	for name, raw := range map[string]string{

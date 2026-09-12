@@ -7,10 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"io"
 	"strings"
 
 	"github.com/mistysya/hackathon_2026/backend/internal/domain"
+	"github.com/mistysya/hackathon_2026/backend/internal/jsonutil"
 	"github.com/mistysya/hackathon_2026/backend/internal/ports"
 )
 
@@ -98,12 +98,12 @@ func (agent *FixtureScenarioAgent) Generate(_ context.Context, input ports.Scena
 }
 
 func renderEmail(source, displayName string) (string, error) {
-	template, err := template.New("campaign-email").Parse(source)
+	tmpl, err := template.New("campaign-email").Parse(source)
 	if err != nil {
 		return "", fmt.Errorf("parse email template: %w", err)
 	}
 	var rendered bytes.Buffer
-	if err := template.Execute(&rendered, struct{ DisplayName string }{DisplayName: displayName}); err != nil {
+	if err := tmpl.Execute(&rendered, struct{ DisplayName string }{DisplayName: displayName}); err != nil {
 		return "", fmt.Errorf("render email template: %w", err)
 	}
 	return strings.ReplaceAll(rendered.String(), landingSentinel, landingPlaceholder), nil
@@ -111,12 +111,7 @@ func renderEmail(source, displayName string) (string, error) {
 
 func decodeScenario(raw []byte) (scenarioOutput, error) {
 	var output scenarioOutput
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&output); err != nil {
-		return scenarioOutput{}, err
-	}
-	if err := requireEOF(decoder); err != nil {
+	if err := jsonutil.DecodeStrict(bytes.NewReader(raw), &output); err != nil {
 		return scenarioOutput{}, err
 	}
 	return output, nil
@@ -133,17 +128,6 @@ func validateFixture(output scenarioOutput) error {
 		return fmt.Errorf("email template does not contain landing sentinel")
 	}
 	return validateSafetyChecks(output.SafetyChecks)
-}
-
-func requireEOF(decoder *json.Decoder) error {
-	var extra any
-	if err := decoder.Decode(&extra); err != nil {
-		if err == io.EOF {
-			return nil
-		}
-		return err
-	}
-	return fmt.Errorf("unexpected trailing JSON value")
 }
 
 var _ ports.ScenarioAgent = (*FixtureScenarioAgent)(nil)

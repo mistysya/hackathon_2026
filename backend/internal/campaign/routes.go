@@ -3,7 +3,6 @@ package campaign
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/mistysya/hackathon_2026/backend/internal/httpapi"
+	"github.com/mistysya/hackathon_2026/backend/internal/jsonutil"
 )
 
 type Routes struct {
@@ -37,7 +37,7 @@ func (routes *Routes) generate(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	var input generateRequest
-	if err := decodeStrictJSON(request.Body, &input); err != nil || strings.TrimSpace(input.EmployeeID) == "" {
+	if err := jsonutil.DecodeStrict(request.Body, &input); err != nil || strings.TrimSpace(input.EmployeeID) == "" {
 		httpapi.WriteError(writer, request, http.StatusBadRequest, "invalid_request", "request must contain employeeId")
 		return
 	}
@@ -79,22 +79,6 @@ func (routes *Routes) writeServiceError(writer http.ResponseWriter, request *htt
 func isJSON(contentType string) bool {
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	return err == nil && mediaType == "application/json"
-}
-
-func decodeStrictJSON(body io.Reader, target any) error {
-	decoder := json.NewDecoder(body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
-		return err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return errors.New("unexpected trailing JSON value")
-		}
-		return err
-	}
-	return nil
 }
 
 func writeJSON(writer http.ResponseWriter, status int, value any) {
