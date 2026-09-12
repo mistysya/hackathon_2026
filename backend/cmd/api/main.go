@@ -8,8 +8,12 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/mistysya/hackathon_2026/backend/internal/campaign"
+	"github.com/mistysya/hackathon_2026/backend/internal/employee"
 	"github.com/mistysya/hackathon_2026/backend/internal/httpapi"
+	"github.com/mistysya/hackathon_2026/backend/internal/profile"
 	"github.com/mistysya/hackathon_2026/backend/internal/store"
+	"github.com/mistysya/hackathon_2026/backend/internal/structured"
 )
 
 func main() {
@@ -30,9 +34,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	// The repository is the shared foundation for future route registrars.
-	// Business routes are intentionally not registered in this phase.
-	_ = store.New(database)
+	repository := store.New(database)
+	validator, err := structured.NewValidator()
+	if err != nil {
+		logger.Error("initialize structured validator", "error", err)
+		os.Exit(1)
+	}
+	profileAdapter, err := profile.NewFixtureAdapter()
+	if err != nil {
+		logger.Error("initialize profile fixture adapter", "error", err)
+		os.Exit(1)
+	}
+	campaignAgent, err := campaign.NewFixtureScenarioAgent()
+	if err != nil {
+		logger.Error("initialize campaign fixture agent", "error", err)
+		os.Exit(1)
+	}
+
+	employeeRoutes := employee.NewRoutes(employee.NewService(repository), logger)
+	profileRoutes := profile.NewRoutes(profile.NewService(repository, profileAdapter, profile.NewFixtureAgent(), validator), logger)
+	campaignRoutes := campaign.NewRoutes(campaign.NewService(repository, repository, campaignAgent, validator, campaign.NewCryptoIDGenerator()), logger)
 
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -40,7 +61,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := httpapi.NewServer(address, httpapi.NewRouter(logger))
+	server := httpapi.NewServer(address, httpapi.NewRouter(logger, employeeRoutes, profileRoutes, campaignRoutes))
 	logger.Info("api listening", "address", listener.Addr().String())
 	if err := httpapi.Serve(ctx, server, listener, httpapi.DefaultShutdownTimeout); err != nil {
 		logger.Error("api stopped", "error", err)

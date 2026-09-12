@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["employeeId", "displayName", "department", "publicFacts", "riskSignals", "recommendedScenario"],
+  "properties": {
+    "employeeId": { "$ref": "#/$defs/nonBlankString" },
+    "displayName": { "$ref": "#/$defs/nonBlankString" },
+    "department": { "type": "string" },
+    "publicFacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fact", "sourceUrl", "confidence", "sourceType"],
+        "properties": {
+          "fact": { "$ref": "#/$defs/nonBlankString" },
+          "sourceUrl": { "type": ["string", "null"] },
+          "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+          "sourceType": { "enum": ["live", "fixture", "manual"] }
+        }
+      }
+    },
+    "riskSignals": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/nonBlankString" }
+    },
+    "recommendedScenario": { "$ref": "#/$defs/nonBlankString" }
+  },
+  "$defs": {
+    "nonBlankString": { "type": "string", "pattern": ".*\\S.*" }
+  }
+}

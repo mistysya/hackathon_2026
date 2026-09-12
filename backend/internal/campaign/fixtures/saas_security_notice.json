@@ -1,0 +1,15 @@
+{
+  "templateId": "saas_security_notice",
+  "difficulty": "high",
+  "subject": "Security awareness notice for your SaaS workspace",
+  "emailHtml": "<p>Hello {{.DisplayName}},</p><p>A safe SaaS security notice training preview is ready.</p><p><a href=\"__LANDING_URL__\">Open preview</a></p>",
+  "landingConfig": {"title":"SaaS security notice","brand":"Security Awareness Demo","description":"A safe SaaS security awareness training preview.","ctaLabel":"Open preview"},
+  "decisionReason": "The profile recommends a controlled SaaS security notice training scenario.",
+  "safetyChecks": [
+    {"rule":"no_real_credentials_requested","passed":true},
+    {"rule":"no_sensitive_personal_data","passed":true},
+    {"rule":"no_unsourced_personal_facts","passed":true},
+    {"rule":"no_prohibited_impersonation","passed":true},
+    {"rule":"cta_points_to_controlled_domain","passed":true}
+  ]
+}
