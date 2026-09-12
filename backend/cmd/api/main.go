@@ -12,6 +12,7 @@ import (
 	"github.com/mistysya/hackathon_2026/backend/internal/employee"
 	"github.com/mistysya/hackathon_2026/backend/internal/httpapi"
 	"github.com/mistysya/hackathon_2026/backend/internal/profile"
+	"github.com/mistysya/hackathon_2026/backend/internal/roleb"
 	"github.com/mistysya/hackathon_2026/backend/internal/store"
 	"github.com/mistysya/hackathon_2026/backend/internal/structured"
 )
@@ -54,6 +55,7 @@ func main() {
 	employeeRoutes := employee.NewRoutes(employee.NewService(repository), logger)
 	profileRoutes := profile.NewRoutes(profile.NewService(repository, profileAdapter, profile.NewFixtureAgent(), validator), logger)
 	campaignRoutes := campaign.NewRoutes(campaign.NewService(repository, repository, campaignAgent, validator, campaign.NewCryptoIDGenerator()), logger)
+	roleBRoutes := roleb.NewHandler(roleb.NewRepository(database))
 
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -61,7 +63,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := httpapi.NewServer(address, httpapi.NewRouter(logger, employeeRoutes, profileRoutes, campaignRoutes))
+	server := httpapi.NewServer(address, httpapi.NewRouter(logger, employeeRoutes, profileRoutes, campaignRoutes, roleBRoutes))
 	logger.Info("api listening", "address", listener.Addr().String())
 	if err := httpapi.Serve(ctx, server, listener, httpapi.DefaultShutdownTimeout); err != nil {
 		logger.Error("api stopped", "error", err)

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/mistysya/hackathon_2026/backend/internal/domain"
 )
@@ -223,6 +224,60 @@ func TestCampaignRoundTripConflictsAndNotFound(t *testing.T) {
 	campaign.EmployeeID = "missing"
 	if err := repository.CreateCampaign(ctx, campaign); !errors.Is(err, ErrConflict) {
 		t.Fatalf("foreign key error = %v, want ErrConflict", err)
+	}
+}
+
+func TestCampaignApproveAndRejectTransitions(t *testing.T) {
+	_, repository := newTestRepository(t)
+	ctx := context.Background()
+	importOneEmployee(t, repository)
+
+	newPendingCampaign := func(id string) domain.GeneratedCampaign {
+		return domain.GeneratedCampaign{
+			CampaignID: id, EmployeeID: "E001", TemplateID: "training_reminder",
+			Difficulty: domain.DifficultyLow, Subject: "Subject", EmailHTML: `<a href="{{landingUrl}}">Open</a>`,
+			LandingConfig:  domain.LandingConfig{Title: "Title", Brand: "Security Awareness Demo", Description: "Description", CTALabel: "Open"},
+			DecisionReason: "fixture", SafetyChecks: []domain.SafetyCheck{}, Status: domain.CampaignStatusPendingReview,
+		}
+	}
+
+	approved := newPendingCampaign("c_approved")
+	if err := repository.CreateCampaign(ctx, approved); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.ApproveCampaign(ctx, approved.CampaignID, "hr@example.test"); err != nil {
+		t.Fatalf("approve campaign: %v", err)
+	}
+	gotApproved, err := repository.GetCampaign(ctx, approved.CampaignID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotApproved.Status != domain.CampaignStatusApproved || gotApproved.ApprovedBy == nil || *gotApproved.ApprovedBy != "hr@example.test" || gotApproved.ApprovedAt == nil {
+		t.Fatalf("approved campaign = %+v", gotApproved)
+	}
+	if _, err := time.Parse(time.RFC3339, *gotApproved.ApprovedAt); err != nil {
+		t.Fatalf("approvedAt is not RFC3339: %q", *gotApproved.ApprovedAt)
+	}
+	if err := repository.RejectCampaign(ctx, approved.CampaignID, "too late"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("reject approved campaign error = %v, want ErrConflict", err)
+	}
+
+	rejected := newPendingCampaign("c_rejected")
+	if err := repository.CreateCampaign(ctx, rejected); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.RejectCampaign(ctx, rejected.CampaignID, "內容需調整"); err != nil {
+		t.Fatalf("reject campaign: %v", err)
+	}
+	gotRejected, err := repository.GetCampaign(ctx, rejected.CampaignID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotRejected.Status != domain.CampaignStatusRejected || gotRejected.RejectionReason == nil || *gotRejected.RejectionReason != "內容需調整" {
+		t.Fatalf("rejected campaign = %+v", gotRejected)
+	}
+	if err := repository.ApproveCampaign(ctx, "missing", "hr@example.test"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("approve missing campaign error = %v, want ErrNotFound", err)
 	}
 }
 
