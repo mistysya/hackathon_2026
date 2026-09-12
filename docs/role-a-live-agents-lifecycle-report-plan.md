@@ -1,4 +1,4 @@
-# Role A Completion：Campaign Lifecycle、Report 與 Live OpenAI Agents
+# Role A Completion：Campaign Lifecycle、Report、Live OpenAI Agents 與 Local Demo Presentation
 
 > 狀態：Ready for implementation
 >
@@ -14,11 +14,13 @@
 
 本計畫不修改 PR #5；所有實作 branch 均從 PR #5 head 建立，完成後再由獨立 integration branch 組裝。
 
-本輪只有三個大任務：
+本輪三個 Role A backend completion 大任務維持不變：
 
 1. Campaign Lifecycle：補上 `approve` 與 `reject`。
 2. Campaign Report：補上 campaign funnel 與 event timeline。
 3. Live OpenAI Pipeline：真實 Enrichment、Profile Agent、Scenario Agent，以及 API 不可用時的 deterministic fixture fallback。
+
+另加入一條可平行的 presentation slice：由同一個 Go server host 本機信箱與受控 Landing Page；`simulate` 不寄真實郵件，而是讓 campaign 出現在指定員工的本機信箱 URL。
 
 完成後，Role A 提供的 Frozen endpoints 為：
 
@@ -35,6 +37,37 @@ GET  /reports/{campaignId}
 ```
 
 `simulate`、landing 與 events 仍由 Role B／PR #3 負責。本輪 Report 可在沒有 Role B 時回傳零值報表；要產生非零 funnel，仍需整合 Role B 的 targets/events 寫入流程。
+
+Presentation 額外提供 HTML routes；它們是 demo surface，不擴張 Frozen JSON API：
+
+```text
+GET /demo/users
+GET /demo/mail/{employeeId}
+GET /demo/mail/{employeeId}/campaign/{campaignId}
+GET /landing/{token}                               # Role B route，presentation 共用
+```
+
+### 1.1 Presentation 行為模型
+
+```text
+Admin 產生並核准 Campaign
+        ↓
+POST /campaigns/{id}/simulate
+        ↓
+建立 campaign_target + opaque token（不寄信、不改磁碟 HTML）
+        ↓
+重新整理 /demo/mail/{employeeId} 即看到新信件
+        ↓
+開啟信件記錄 opened
+        ↓
+CTA 將 {{landingUrl}} 換成該 target 的 /landing/{token}
+        ↓
+受控 Landing 記錄 clicked / form_attempted / training_viewed
+```
+
+「發送」的資料來源是 SQLite campaign/target 狀態；信箱與信件頁在 request 時由 Go template server-side render。CSS/JS/template assets 使用 `go:embed`，所以 presentation 可離線運作，但不會為每次發送重寫或複製 HTML 檔案。
+
+Admin 管理介面仍由既有前端 owner 負責：按鈕依序呼叫 approve/simulate，成功後可開啟 `/demo/mail/{employeeId}`。A9 不另做第二套 Admin UI；它負責 simulate 之後的本機「收件者視角」。
 
 ## 2. OpenAI 接法與 Credential 結論
 
@@ -81,6 +114,9 @@ Project rate/spend limit
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | 僅接受 OpenAI Responses-compatible endpoint |
 | `OPENAI_TIMEOUT` | `20s` | 每次 provider call 的總 timeout |
 | `OPENAI_MAX_RETRIES` | `1` | provider transient error 的額外嘗試次數上限 |
+| `PRESENTATION_ENABLED` | binary `false`、Demo Compose `true` | 是否掛載本機 HTML demo routes |
+| `PRESENTATION_MAIL_ORIGIN` | `http://mail.demo.test:8080` | 信箱頁面的公開 origin；Demo 僅允許 loopback `.test` origin |
+| `PRESENTATION_LANDING_ORIGIN` | `http://landing.demo.test:8080` | 取代 `{{landingUrl}}` 時使用的受控 landing origin |
 
 模式語意：
 
@@ -97,10 +133,12 @@ flowchart LR
     P5[PR #5 head 1d1bb66] --> A6[A6 Campaign Lifecycle]
     P5 --> A7[A7 Campaign Report]
     P5 --> A8[A8 Live OpenAI Pipeline]
-    A6 --> A9[A9 Role A Completion Integration]
-    A7 --> A9
-    A8 --> A9
-    B[Role B PR #3 adaptation] -. later integration .-> A9
+    P5 --> A9[A9 Local Demo Presentation]
+    A6 --> A10[A10 Role A Completion Integration]
+    A7 --> A10
+    A8 --> A10
+    A9 --> A10
+    B[Role B PR #3 adaptation] -. simulate/landing/events .-> A10
 ```
 
 建立方式：
@@ -112,22 +150,23 @@ git rev-parse origin/codex/a-backend-integration
 git worktree add -b codex/a6-campaign-lifecycle ../hackathon_2026-a6-lifecycle origin/codex/a-backend-integration
 git worktree add -b codex/a7-campaign-report ../hackathon_2026-a7-report origin/codex/a-backend-integration
 git worktree add -b codex/a8-openai-agents ../hackathon_2026-a8-openai origin/codex/a-backend-integration
+git worktree add -b codex/a9-demo-presentation ../hackathon_2026-a9-presentation origin/codex/a-backend-integration
 ```
 
-A9 在三個 branch 完成後建立：
+A10 在四個 branch 完成後建立：
 
 ```sh
-git worktree add -b codex/a9-role-a-completion ../hackathon_2026-a9-integration origin/codex/a-backend-integration
+git worktree add -b codex/a10-role-a-completion ../hackathon_2026-a10-integration origin/codex/a-backend-integration
 ```
 
 若 branch/path 已存在，停止並確認持有人；不得刪除、覆寫或靜默換名。
 
 ## 4. 共通不可變規則
 
-- A6–A8 不修改 `backend/cmd/api/main.go`；只有 A9 wiring。
+- A6–A9 不修改 `backend/cmd/api/main.go`；只有 A10 wiring。
 - 不修改 `docs/api-contract.md`、`backend/schema.sql` 或既有 JSON response shape。
 - 不新增 `/api` prefix；Vite proxy 繼續負責 rewrite。
-- 新 HTTP modules 都實作獨立 `httpapi.RouteRegistrar`，不修改 PR #5 既有 routes 以避免平行衝突。
+- 新 HTTP/HTML modules 都實作獨立 `httpapi.RouteRegistrar`，不修改 PR #5 既有 routes 以避免平行衝突。
 - Request/model decoder 重用 PR #5 的 `internal/jsonutil.DecodeStrict`，統一拒絕 unknown fields、空 body 與 trailing JSON。
 - Handler 只負責 HTTP decode/encode/error mapping；狀態機、fallback 與 SQL 流程放 service/adapter。
 - API key、Authorization header、完整 prompt、完整 employee payload、原始 model output 不得寫入 log。
@@ -147,7 +186,7 @@ git worktree add -b codex/a9-role-a-completion ../hackathon_2026-a9-integration 
   - `backend/internal/store/campaign_lifecycle_test.go`
   - `backend/internal/campaign/lifecycle_*.go`
 
-不得修改 PR #5 的 `campaign/routes.go`。Lifecycle 使用自己的 registrar，由 A9 掛載。
+不得修改 PR #5 的 `campaign/routes.go`。Lifecycle 使用自己的 registrar，由 A10 掛載。
 
 ### Frozen port
 
@@ -296,7 +335,7 @@ GET /reports/{campaignId}
   - `backend/internal/campaign/fallback_*.go`
   - `backend/go.mod`、`backend/go.sum`
 
-A8 不修改 `cmd/api`、Compose 或 README；環境 wiring 集中由 A9 完成。
+A8 不修改 `cmd/api`、Compose 或 README；環境 wiring 集中由 A10 完成。
 
 ### 7.1 共用 OpenAI client
 
@@ -363,22 +402,43 @@ Profile Agent 必須真的呼叫 OpenAI，但模型只負責分析，不擁有 i
 
 ### 7.4 Live Scenario Agent
 
-Scenario Agent 也必須真的呼叫 OpenAI，但模型只做 allowlisted decision：
+Scenario Agent 也必須真的呼叫 OpenAI。模型可產生展示用主旨、信件文字與 Landing 文案，但不能輸出可執行 HTML／JS／CSS，也不能決定任意 URL：
 
 ```json
 {
   "templateId": "training_reminder",
+  "senderPersona": "demo_learning",
+  "subject": "資安課程確認提醒",
+  "emailBody": ["Hi Demo User,", "請確認本週的測試課程資訊。"],
+  "ctaLabel": "查看測試課程",
+  "landingTitle": "測試課程確認",
+  "landingDescription": "這是本機安全演練頁面。",
   "decisionReason": "..."
 }
 ```
 
 - `templateId` 只允許 PR #5 既有四個 fixtures。
-- Difficulty、subject、email HTML、landing config 與五個 safety checks 由選中的已審核 fixture提供。
-- Employee display name 仍由現有 `html/template` escape 後渲染。
-- Model 不得自由生成 URL、HTML、登入頁、credential request 或品牌。
+- `senderPersona` 只能從 Go catalog 的明確測試寄件者選擇，例如 `demo_events`、`demo_learning`、`demo_people_ops`、`demo_security`；每個 template ID 固定對應一個 persona、`.test` sender address 與 Demo 顯示名稱，model 回傳值必須與所選 template 的 catalog entry 一致。
+- Frozen campaign schema 沒有 sender 欄位，因此持久化時只保存既有 `templateId`；presentation 以相同 catalog 從 `templateId` 重建寄件者。這代表 agent 藉由選擇 template/persona 決定寄件者，但不能產生任意地址，也不把 sender 偷藏進 `emailHtml`。
+
+Catalog 在此規劃中凍結，A8 與 A9 可各自用不同 owned file 實作，A10 以 contract test 防止漂移：
+
+| templateId | senderPersona | 顯示寄件者 | address |
+|---|---|---|---|
+| `event_followup` | `demo_events` | Demo Events | `events@demo.test` |
+| `training_reminder` | `demo_learning` | Demo Learning | `learning@demo.test` |
+| `benefit_update` | `demo_people_ops` | Demo People Ops | `people-ops@demo.test` |
+| `saas_security_notice` | `demo_security` | Demo Security | `security@demo.test` |
+
+- Agent 產生 subject、email body、CTA 及 Landing 文案；Go code 負責長度限制、禁止詞／敏感要求、test-brand allowlist 與 URL policy。
+- Difficulty 由 allowlisted template catalog 決定；五個 safety checks 由 Go policy evaluator 產生，不能相信模型自評。
+- Go 使用 `html/template` 將純文字欄位 escape 並渲染為既有 `emailHtml`；只由程式插入字面 `{{landingUrl}}` placeholder。
+- `landingConfig` 由 Go 將已驗證的 Landing 文案與既有 `Security Awareness Demo` test brand 組成，Role B 的 Go template 再渲染最終頁面。
+- Model 不得自由生成 URL、raw HTML、登入頁、credential request、真實 Gmail/Google sender 或真實組織品牌。
+- 如果產品堅持任意 free-form sender，必須另行 unfreeze API/schema 並新增明確 sender fields；本計畫不把 sender 偷塞入 `emailHtml` 或其他欄位。
 - 最終完整 scenario JSON 繼續通過 PR #5 schema、template allowlist、test brand、placeholder 與 safety policy。
 
-這使「情境選擇與理由」來自真實模型，同時保留 deterministic、安全且可審查的演練內容。
+這使情境決策與展示文案來自真實模型，同時由 Go 掌握 sender、HTML、URL 與安全政策。Fixture fallback 則繼續使用 PR #5 已審核內容。
 
 ### 7.5 Fallback policy
 
@@ -420,7 +480,7 @@ agentStage, selectedMode, fallbackReason, model, responseId, latencyMs, requestI
 - Client：Bearer header、base URL、strict schema、`store:false`、timeout、refusal/incomplete/error parsing。
 - Enrichment：live source normalization、drop missing source、empty evidence、prompt injection content 不成為指令。
 - Profile：identity 由程式擁有、facts/source preservation、scenario enum、敏感輸出拒絕。
-- Scenario：模型只選 allowlisted fixture；HTML、brand、placeholder 與 safety checks 仍 deterministic。
+- Scenario：模型產生的 subject/body/CTA/Landing copy 通過長度與禁止內容 policy；template/persona 一致；HTML escaping、brand、placeholder 與 safety checks 由 Go 決定。
 - 每個 stage 的 missing key、401、quota 429、rate 429、timeout、503 fallback。
 - Context cancellation 不 fallback。
 - `fixture` mode 零 network calls，結果與 PR #5 fixtures一致。
@@ -430,11 +490,117 @@ agentStage, selectedMode, fallbackReason, model, responseId, latencyMs, requestI
 
 建議 commit：`feat(backend): add live OpenAI agents with fixture fallback`
 
-## 8. A9 — Integration
+## 8. A9 — Local Demo Presentation
 
 ### Branch 與 ownership
 
-- Branch：`codex/a9-role-a-completion`
+- Branch：`codex/a9-demo-presentation`
+- 新增／修改：
+  - `backend/internal/ports/presentation.go`
+  - `backend/internal/store/presentation.go`
+  - `backend/internal/store/presentation_test.go`
+  - `backend/internal/presentation/**`
+  - `backend/internal/presentation/web/**`
+
+A9 不修改 `schema.sql`、Frozen JSON contract、Role B 的 simulate/event/landing handlers 或 `cmd/api`。它只新增讀取既有 campaign/target 狀態的 HTML presentation registrar；A10 再掛載。
+
+### 8.1 資料與渲染模型
+
+「寄送」沿用 Frozen `POST /campaigns/{id}/simulate`：Role B 建立 `campaign_targets` 與 opaque token，A9 不新增 outbox table，也不在磁碟上改寫 HTML。每次瀏覽信箱時即時查詢 SQLite，只有 `status = 'simulated'` 且存在對應 target 的 campaign 才顯示。
+
+新增獨立 port，DTO 只包含 presentation 所需欄位，不把 target token 加回 Frozen campaign response：
+
+```go
+type MailboxMessage struct {
+    CampaignID    string
+    EmployeeID    string
+    EmployeeName  string
+    TemplateID    string
+    Subject       string
+    EmailHTML     string
+    TargetToken   string
+    CreatedAt     time.Time
+}
+
+type PresentationRepository interface {
+    ListMailbox(context.Context, string) ([]MailboxMessage, error)
+    GetMailboxMessage(context.Context, string, string) (MailboxMessage, error)
+}
+```
+
+Repository 規則：
+
+1. 以 `campaign_targets` join `campaigns`、`employees`；同時限制 target.employee_id、campaign.employee_id 與 URL employeeId 相同，避免跨使用者讀取。
+2. 只顯示 `simulated`，`pending_review`、`approved`、`rejected` 不得出現在信箱。
+3. 列表固定 `campaigns.created_at DESC, campaigns.id ASC`，空信箱回 `[]`。
+4. Store 只回傳 template ID；Presentation service 依本文件凍結的 template/persona catalog 推導 sender display name/address。Address 一律使用 `.test`，無對應 template 時 fail closed。A8/A9 不改同一檔案，A10 再以 contract test確認兩邊 mapping 一致。
+5. Token 只用於組成 CTA，不顯示在信箱列表、log 或 HTML data attributes。
+6. `GetMailboxMessage` 同時以 employee ID 與 campaign ID 查詢，不允許知道 campaign ID 就跨員工開信。
+
+### 8.2 HTML routes 與使用者切換
+
+```text
+GET /demo/users
+GET /demo/mail/{employeeId}
+GET /demo/mail/{employeeId}/campaign/{campaignId}
+```
+
+- `/demo/users` 是展示入口，列出員工與各自信箱連結；URL path 是切換使用者的唯一狀態，不使用 cookie/session。
+- `/demo/mail/{employeeId}` 顯示 Gmail-inspired inbox，但不使用 Google logo、商標、遠端資源或宣稱是真實 Gmail；畫面固定顯示 `LOCAL SECURITY SIMULATION` 標記。
+- 信件 detail response 才把 `emailHtml` 中精確的 `{{landingUrl}}` 取代為 `PRESENTATION_LANDING_ORIGIN + /landing/{url.PathEscape(token)}`。`GET /campaigns/{id}` 仍回原始 placeholder，符合 Frozen contract。
+- 所有 template、CSS 與極小量 JS 以 `go:embed` 包進 binary；不用 Node build、CDN、Google Fonts 或外部圖片，因此離線仍可 Demo。
+- Go `html/template` 負責 shell 與純文字 escaping。只有 Campaign service 由純文字欄位產生、且已通過既有 scenario policy 的 email fragment 可進入受控 `template.HTML` boundary；A9 在輸出前再次執行同一 validator，拒絕 script、event handler、iframe、form、非受控 URL 或不恰好一個 placeholder 的資料。
+- HTML routes 的 404 回本機展示頁，不改 Frozen JSON API error envelope；其他 `/employees`、`/campaigns`、`/reports` routes 行為不變。
+- MVP 不新增 mailbox authentication；因為這是 presentation-only surface，所以只有 `PRESENTATION_ENABLED=true` 才掛載，且 Compose 只能 publish 到 host loopback。若要部署到共享環境，必須先加入認證，不能沿用此設定。
+
+### 8.3 Open / Click / Landing event 邊界
+
+- 開啟信件 detail 後，頁面 JS 只送一次 `POST /events`：`{"token":"...","eventType":"opened"}`。Role B 的 unique constraint/`INSERT OR IGNORE` 提供重整冪等。
+- Inbox 列表不得記 `opened`；點擊 CTA 也不得從信箱先記 `clicked`。
+- CTA 導向 Role B 的 `GET /landing/{token}`；該頁載入才記 `clicked`，Dummy Form 與教育揭露分別記 `form_attempted`、`training_viewed`。
+- Presentation 不收集、保存或回傳任何輸入值；Dummy Form 欄位不得有 `name`，送 event 前清空 DOM value，metadata 不得帶原始值。
+- A9 單獨測試時，以 `httptest` 驗證 HTML/JS 只會組出允許的 `/events` payload；實際執行 JavaScript、完整 event persistence 與 landing browser E2E 在 A10 合併 PR #3 後驗證，A9 不複製 Role B 程式碼。
+
+### 8.4 本機 DNS 與安全護欄
+
+Demo 操作者手動在 `/etc/hosts` 加入：
+
+```text
+127.0.0.1 mail.demo.test
+127.0.0.1 landing.demo.test
+```
+
+瀏覽：
+
+```text
+http://mail.demo.test:8080/demo/users
+http://mail.demo.test:8080/demo/mail/E001
+```
+
+- 使用 RFC 保留的 `.test`，不污染真實 Gmail/Google 或客戶網域；Demo 結束後由操作者自行移除兩行。
+- Container 內 API process 維持 `:8080`；Compose 只 publish 到 host `127.0.0.1:8080`。不要求 root、不佔用 80/443，也不在應用程式內自動修改 `/etc/hosts`。
+- 啟動時解析 presentation origins；scheme 只允許 `http`、host 必須為明確設定的 `.test` host、不得包含 userinfo/query/fragment。Production/非 Demo 模式可完全不掛載 HTML registrar。
+- HTML response 加上 `Content-Security-Policy`、`X-Content-Type-Options: nosniff`、`Referrer-Policy: no-referrer` 與 `Cache-Control: no-store`；CSP 只允許 self script/style/connect，禁止 frame/object/base。
+- 頁面全程標示模擬，寄件者一律 `.test`，Landing 不模仿真實登入品牌，也不接受真實 credential；此 slice 是授權的本機安全演練展示，不是寄信或 credential capture 系統。
+
+### 8.5 必要測試
+
+- Repository：只列 simulated、有 target 的信件；排序穩定；空信箱；unknown employee/message；跨 employee campaign 取用為 404。
+- Presentation：兩個 URL 切換員工後信件完全隔離；同一員工多封信；subject/sender/body 正確。
+- CTA：只替換精確 placeholder；token path escaped；origin validation；未受控 URL/raw script/form fail closed。
+- HTML escaping：employee name、subject、Landing copy 不能注入；fixture email fragment 通過受控 sanitizer/policy。
+- Event：列表不送 opened；detail 只送 opened；payload 不含 employeeId、campaignId、email、表單值；CTA 不送 clicked。
+- Security headers、無外部資源、`LOCAL SECURITY SIMULATION` banner、`.test` sender。
+- Handler：HTML 200/404/500、request ID；既有 JSON 404/error middleware 不受影響。
+- 所有 repository tests 使用 `t.TempDir()` 真實 SQLite；handler tests 不依賴 `/etc/hosts`。
+
+建議 commit：`feat(backend): add local demo mailbox presentation`
+
+## 9. A10 — Integration
+
+### Branch 與 ownership
+
+- Branch：`codex/a10-role-a-completion`
 - 唯一可修改：
   - `backend/cmd/api/main.go`
   - `backend/compose.yaml`
@@ -448,6 +614,7 @@ agentStage, selectedMode, fallbackReason, model, responseId, latencyMs, requestI
 1. codex/a8-openai-agents
 2. codex/a6-campaign-lifecycle
 3. codex/a7-campaign-report
+4. codex/a9-demo-presentation
 ```
 
 Composition root：
@@ -456,8 +623,8 @@ Composition root：
 2. 初始化現有 fixtures，無論 live 是否啟用都必須成功，因為它們是 fallback。
 3. `fixture`：直接注入 fixture adapter/agents。
 4. `auto`／`live_required`：初始化 OpenAI client，建立 live implementations；`auto` 外包 fallback decorators。
-5. 建立 Lifecycle service/routes 與 Report service/routes。
-6. Router 掛載現有 employee/profile/campaign routes，再加入 lifecycle/report registrars。
+5. 建立 Lifecycle、Report 與 Presentation service/routes。
+6. Router 掛載現有 employee/profile/campaign routes，再加入 lifecycle/report/presentation registrars。
 
 Compose environment：
 
@@ -468,6 +635,9 @@ OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4o-mini}"
 OPENAI_BASE_URL: "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
 OPENAI_TIMEOUT: "${OPENAI_TIMEOUT:-20s}"
 OPENAI_MAX_RETRIES: "${OPENAI_MAX_RETRIES:-1}"
+PRESENTATION_ENABLED: "${PRESENTATION_ENABLED:-true}"
+PRESENTATION_MAIL_ORIGIN: "${PRESENTATION_MAIL_ORIGIN:-http://mail.demo.test:8080}"
+PRESENTATION_LANDING_ORIGIN: "${PRESENTATION_LANDING_ORIGIN:-http://landing.demo.test:8080}"
 ```
 
 ### Integration tests
@@ -483,13 +653,16 @@ OPENAI_MAX_RETRIES: "${OPENAI_MAX_RETRIES:-1}"
 7. Existing campaign、零 target：report 回全零與 `events: []`。
 8. Seed targets/events：report 與 `docs/fixtures/report_c_9f2c8a.json` 等價。
 9. Unknown campaign lifecycle/report 都使用 Frozen 404 envelope 與 request ID。
+10. Simulate 後只有 target employee 的 mailbox 出現 campaign；另一位員工不可讀取。
+11. 開啟信件只建立 `opened`；CTA 進 Landing 才建立 `clicked`；重整不灌水。
+12. Agent live/fallback 產生的 subject、body、sender persona 與 Landing 文案都能安全渲染；頁面無外部 network dependency。
 
 Role B 合併後再加 team-level E2E：
 
 ```text
 import -> enrich(live or fallback) -> generate(live or fallback)
 -> approve -> simulate -> opened/clicked/form_attempted/training_viewed
--> report
+-> report，並從 /demo/users 切換兩位員工驗證信箱隔離
 ```
 
 ### 現場 preflight
@@ -501,8 +674,10 @@ import -> enrich(live or fallback) -> generate(live or fallback)
 3. 確認 logs 顯示 live、model、response ID，且沒有 secret／完整 prompt。
 4. 將 key 暫時改成無效值，切回 `AGENT_MODE=auto`，確認相同 flow 自動成功並使用 fixture。
 5. 換回正式 key、重啟 container；不需 rebuild。
+6. 依 README 手動加入兩個 `.test` hosts，從信箱開信、點 CTA、完成教育頁並核對 report funnel。
+7. Demo 結束後移除 `/etc/hosts` 的兩筆映射；應用程式不會自行修改系統 DNS。
 
-## 9. 驗證與完成定義
+## 10. 驗證與完成定義
 
 每支 implementation branch：
 
@@ -512,7 +687,7 @@ docker compose run --rm api go test -race ./...
 docker compose run --rm api go vet ./...
 ```
 
-A9 額外執行：
+A10 額外執行：
 
 ```sh
 docker build --target runtime -t hackathon-2026-api:role-a-complete .
@@ -529,10 +704,14 @@ docker compose up --build -d api
 - `live_required` 能讓 preflight 明確暴露 credential/model/provider 問題。
 - 更換相容 OpenAI Project key 只需換 environment secret 並重啟，不需改碼或 rebuild。
 - API key 永不進 Git、前端、response 或 logs。
+- Simulate 不寄真實郵件、不重寫靜態 HTML；SQLite target 狀態在信箱頁即時呈現。
+- `/demo/users` 可由 URL 切換使用者，且 campaign/target 不會跨信箱洩漏。
+- 信件 opened 與 Landing clicked 分別記錄，完整流程能反映在 report funnel。
+- 信箱與 Landing 只使用本機 `.test` 網域、清楚標示 simulation、無外部 assets 或 credential capture。
 - 不修改 Frozen endpoint payloads，不建立額外 `/api` routes。
 - PR #5 保持不變；新功能由獨立 Role A completion PR 交付。
 
-## 10. Agent 回報格式
+## 11. Agent 回報格式
 
 ```text
 Branch:
@@ -551,4 +730,4 @@ Integration notes:
 git diff --name-only 1d1bb66b95fdd1b954f99c55124f077f805b1332...HEAD
 ```
 
-輸出超出 ownership 時不得直接交付 A9；先由 owner 修正或明確協調。
+輸出超出 ownership 時不得直接交付 A10；先由 owner 修正或明確協調。
