@@ -79,7 +79,6 @@ func NewRouter(database *sql.DB, logger *slog.Logger, agentConfig openaiapi.Conf
 	employeeRoutes := employee.NewRoutes(employee.NewService(repository), logger)
 	profileRoutes := profile.NewRoutes(profile.NewService(repository, profileAdapter, profileAgent, validator), logger)
 	campaignRoutes := campaign.NewRoutes(campaign.NewService(repository, repository, scenarioAgent, validator, campaign.NewCryptoIDGenerator()), logger)
-	lifecycleRoutes := campaign.NewLifecycleRoutes(campaign.NewLifecycleService(repository), logger)
 	roleBRoutes := roleb.NewHandler(roleb.NewRepository(database))
-	return httpapi.NewRouter(logger, employeeRoutes, profileRoutes, campaignRoutes, lifecycleRoutes, roleBRoutes), nil
+	return httpapi.NewRouter(logger, employeeRoutes, profileRoutes, campaignRoutes, roleBRoutes), nil
 }

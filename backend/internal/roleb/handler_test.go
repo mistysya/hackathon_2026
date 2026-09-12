@@ -61,6 +61,14 @@ func TestSimulateCreatesOpaqueTokenAndLandingURL(t *testing.T) {
 	if len(token) != 32 || strings.Contains(token, "E001") {
 		t.Fatalf("token should be 32 hex chars and contain no employee id, got %q", token)
 	}
+	var subject, emailHTML string
+	var deliveredAt sql.NullString
+	if err := db.QueryRow(`SELECT subject, email_html, delivered_at FROM mailbox_messages WHERE campaign_id = 'c_demo'`).Scan(&subject, &emailHTML, &deliveredAt); err != nil {
+		t.Fatalf("read delivered mailbox message: %v", err)
+	}
+	if subject != "subject" || emailHTML != `<a href="{{landingUrl}}">CTA</a>` || !deliveredAt.Valid {
+		t.Fatalf("unexpected delivered mailbox message subject=%q html=%q delivered=%v", subject, emailHTML, deliveredAt)
+	}
 }
 
 func TestPostEventsIsIdempotentAndDoesNotStoreFormValues(t *testing.T) {

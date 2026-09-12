@@ -63,6 +63,23 @@ CREATE TABLE IF NOT EXISTS campaigns (
 );
 CREATE INDEX IF NOT EXISTS idx_campaigns_employee ON campaigns(employee_id);
 
+-- A generated campaign is stored separately as a privacy-safe mailbox item.
+-- The mailbox UI may later read only delivered rows; the generated payload is
+-- never reconstructed from a browser message or an external mail provider.
+CREATE TABLE IF NOT EXISTS mailbox_messages (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  campaign_id    TEXT NOT NULL UNIQUE REFERENCES campaigns(id),
+  employee_id    TEXT NOT NULL REFERENCES employees(employee_id),
+  sender_name    TEXT NOT NULL,
+  sender_address TEXT NOT NULL,
+  subject        TEXT NOT NULL,
+  email_html     TEXT NOT NULL,
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  delivered_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_mailbox_messages_employee_delivery
+  ON mailbox_messages(employee_id, delivered_at DESC, id DESC);
+
 CREATE TABLE IF NOT EXISTS campaign_targets (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   campaign_id TEXT NOT NULL REFERENCES campaigns(id),

@@ -95,8 +95,11 @@ func (r *Repository) SimulateCampaign(ctx context.Context, campaignID string) (S
 	if err != nil {
 		return SimulateResponse{}, err
 	}
-	var employeeID string
-	if err := tx.QueryRowContext(ctx, `SELECT employee_id FROM campaigns WHERE id = ?`, campaignID).Scan(&employeeID); err != nil {
+	var employeeID, subject, emailHTML, landingConfigJSON string
+	if err := tx.QueryRowContext(ctx, `
+		SELECT employee_id, COALESCE(subject, ''), COALESCE(email_html, ''), landing_config_json
+		FROM campaigns WHERE id = ?
+	`, campaignID).Scan(&employeeID, &subject, &emailHTML, &landingConfigJSON); err != nil {
 		if err == sql.ErrNoRows {
 			return SimulateResponse{}, ErrNotFound
 		}
@@ -115,6 +118,9 @@ INSERT INTO campaign_targets (campaign_id, employee_id, token)
 VALUES (?, ?, ?)`, campaignID, employeeID, token); err != nil {
 		return SimulateResponse{}, err
 	}
+	if err := r.persistMailboxDelivery(ctx, tx, campaignID, employeeID, subject, emailHTML, landingConfigJSON); err != nil {
+		return SimulateResponse{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return SimulateResponse{}, err
 	}
@@ -128,6 +134,40 @@ VALUES (?, ?, ?)`, campaignID, employeeID, token); err != nil {
 			LandingURL: fmt.Sprintf("/landing/%s", token),
 		}},
 	}, nil
+}
+
+// persistMailboxDelivery makes simulation the delivery boundary. INSERT OR
+// IGNORE backfills campaigns made before mailbox persistence was introduced;
+// current campaigns already have a row from store.CreateCampaign.
+func (r *Repository) persistMailboxDelivery(ctx context.Context, tx *sql.Tx, campaignID, employeeID, subject, emailHTML, landingConfigJSON string) error {
+	senderName := "Security Awareness Demo"
+	var config domain.LandingConfig
+	if json.Unmarshal([]byte(landingConfigJSON), &config) == nil && config.Brand != "" {
+		senderName = config.Brand
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO mailbox_messages (
+			campaign_id, employee_id, sender_name, sender_address, subject, email_html
+		) VALUES (?, ?, ?, 'notification@campaign.example.test', ?, ?)
+	`, campaignID, employeeID, senderName, subject, emailHTML); err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, `
+		UPDATE mailbox_messages
+		SET delivered_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+		WHERE campaign_id = ? AND delivered_at IS NULL
+	`, campaignID)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows != 1 {
+		return fmt.Errorf("mark mailbox delivery for campaign %q", campaignID)
+	}
+	return nil
 }
 
 func (r *Repository) CampaignReport(ctx context.Context, campaignID string) (domain.CampaignReport, error) {

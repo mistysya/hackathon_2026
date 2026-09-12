@@ -179,7 +179,7 @@ func TestReplaceProfileRollsBackAfterFactInsertFailure(t *testing.T) {
 }
 
 func TestCampaignRoundTripConflictsAndNotFound(t *testing.T) {
-	_, repository := newTestRepository(t)
+	database, repository := newTestRepository(t)
 	ctx := context.Background()
 	importOneEmployee(t, repository)
 
@@ -204,6 +204,17 @@ func TestCampaignRoundTripConflictsAndNotFound(t *testing.T) {
 	}
 	if err := repository.CreateCampaign(ctx, campaign); err != nil {
 		t.Fatalf("create campaign: %v", err)
+	}
+	var senderName, senderAddress, subject, emailHTML string
+	var deliveredAt sql.NullString
+	if err := database.QueryRowContext(ctx, `
+		SELECT sender_name, sender_address, subject, email_html, delivered_at
+		FROM mailbox_messages WHERE campaign_id = ?
+	`, campaign.CampaignID).Scan(&senderName, &senderAddress, &subject, &emailHTML, &deliveredAt); err != nil {
+		t.Fatalf("read persisted mailbox message: %v", err)
+	}
+	if senderName != campaign.LandingConfig.Brand || senderAddress != MailboxSenderAddress || subject != campaign.Subject || emailHTML != campaign.EmailHTML || deliveredAt.Valid {
+		t.Fatalf("unexpected mailbox row sender=%q address=%q subject=%q html=%q delivered=%v", senderName, senderAddress, subject, emailHTML, deliveredAt)
 	}
 	got, err := repository.GetCampaign(ctx, campaign.CampaignID)
 	if err != nil {

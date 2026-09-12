@@ -29,7 +29,12 @@ func (repository *Repository) CreateCampaign(ctx context.Context, campaign domai
 		return fmt.Errorf("encode safety checks: %w", err)
 	}
 
-	_, err = repository.db.ExecContext(ctx, `
+	tx, err := repository.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin create campaign: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO campaigns (
 			id, employee_id, template_id, status, difficulty, decision_reason, subject, email_html,
 			landing_config_json, safety_checks_json, approved_by, approved_at, rejection_reason
@@ -48,9 +53,14 @@ func (repository *Repository) CreateCampaign(ctx context.Context, campaign domai
 		campaign.ApprovedBy,
 		campaign.ApprovedAt,
 		campaign.RejectionReason,
-	)
-	if err != nil {
+	); err != nil {
 		return fmt.Errorf("create campaign %q: %w", campaign.CampaignID, mapError(err))
+	}
+	if err := insertMailboxMessage(ctx, tx, campaign); err != nil {
+		return fmt.Errorf("persist campaign mailbox message %q: %w", campaign.CampaignID, mapError(err))
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit create campaign %q: %w", campaign.CampaignID, err)
 	}
 	return nil
 }
