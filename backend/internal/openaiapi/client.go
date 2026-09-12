@@ -130,6 +130,9 @@ func (c *HTTPClient) do(ctx, parent context.Context, request Request) ([]byte, M
 	limited := io.LimitReader(response.Body, 2<<20)
 	data, readErr := io.ReadAll(limited)
 	if readErr != nil {
+		if parent.Err() != nil {
+			return nil, Metadata{}, 0, parent.Err()
+		}
 		return nil, Metadata{}, 0, &ProviderError{Kind: ErrorTransient, StatusCode: response.StatusCode}
 	}
 	retryAfter := parseRetryAfter(response.Header.Get("Retry-After"))

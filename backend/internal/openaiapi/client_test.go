@@ -80,6 +80,38 @@ func TestStructuredResponseDoesNotFallbackCanceledContext(t *testing.T) {
 	}
 }
 
+func TestStructuredResponsePropagatesCancellationDuringBodyRead(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client, err := NewHTTPClient(Config{APIKey: "key", Model: "model", BaseURL: "https://example.test", Timeout: time.Second}, &http.Client{
+		Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusOK, Body: cancelingReadCloser{cancel: cancel}}, nil
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = client.StructuredResponse(ctx, Request{SchemaName: "test", Schema: json.RawMessage(`{}`)})
+	if !errors.Is(err, context.Canceled) || IsFallbackEligible(err) {
+		t.Fatalf("err = %v, want non-fallback context.Canceled", err)
+	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (function roundTripperFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return function(request)
+}
+
+type cancelingReadCloser struct{ cancel context.CancelFunc }
+
+func (body cancelingReadCloser) Read([]byte) (int, error) {
+	body.cancel()
+	return 0, errors.New("simulated body read failure")
+}
+
+func (cancelingReadCloser) Close() error { return nil }
+
 func asProvider(err error, target **ProviderError) bool { return errors.As(err, target) }
 
 func TestStructuredResponseFallsBackOnProviderTimeout(t *testing.T) {

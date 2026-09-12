@@ -39,7 +39,7 @@ func (agent *OpenAIScenarioAgent) Generate(ctx context.Context, input ports.Scen
 	if agent == nil || agent.client == nil {
 		return nil, fmt.Errorf("%w: scenario client unavailable", openaiapi.ErrConfiguration)
 	}
-	instructions := "Create neutral, plain-text training copy only for a safe local Security Awareness Demo. Choose only a listed template and its matching demo sender persona. Use one to three short email-body paragraphs, no real organization brands, and no sender address. Every output string must avoid these literal strings: <, >, http://, https://, javascript:, password, credential, 登入, 密碼, 帳密, gmail, google."
+	instructions := "Create neutral, plain-text training copy only for a safe local Security Awareness Demo. Use exactly one matching template and sender persona: event_followup=demo_events; training_reminder=demo_learning; benefit_update=demo_people_ops; saas_security_notice=demo_security. Use one to three short email-body paragraphs, no real organization brands, and no sender address. Every output string must avoid these literal strings: <, >, http://, https://, javascript:, password, credential, 登入, 密碼, 帳密, gmail, google."
 	if feedback != nil && strings.TrimSpace(feedback.Message) != "" {
 		instructions += " Correct this schema or policy issue: " + truncateScenarioFeedback(feedback.Message)
 	}
