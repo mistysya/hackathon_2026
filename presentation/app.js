@@ -472,13 +472,24 @@ function addExternalLinkTarget(emailHtml) {
 
 function notifyCampaignOpened(message) {
   if (!message.isCampaign || message.openedEventSent) return;
-  message.openedEventSent = true;
-  message.deliverySource?.postMessage({
+  window.clearTimeout(message.openedRetryTimer);
+  if (!message.deliverySource || message.deliverySource.closed) return;
+  message.deliverySource.postMessage({
     type: "simsafe:mailbox-event",
     campaignId: message.campaignId,
     token: message.token,
     eventType: "opened"
   }, message.deliveryOrigin);
+  // Only an ACK after a successful API write completes delivery. The API deduplicates retries.
+  message.openedRetryTimer = window.setTimeout(() => notifyCampaignOpened(message), 2000);
+}
+
+function receiveEventAcknowledgement(event) {
+  if (event.data?.type !== "simsafe:event-ack" || event.data.eventType !== "opened") return;
+  const message = messages.find((item) => item.isCampaign && item.campaignId === event.data.campaignId && item.token === event.data.token);
+  if (!message || event.source !== message.deliverySource || event.origin !== message.deliveryOrigin) return;
+  message.openedEventSent = true;
+  window.clearTimeout(message.openedRetryTimer);
 }
 
 function escapeHtml(value) {
@@ -601,11 +612,20 @@ function textPreview(emailHtml) {
 }
 
 function receiveGeneratedCampaign(event) {
-  if (!isAllowedDemoOrigin(event.origin) || event.data?.type !== "simsafe:campaign-delivered") return;
+  if (!window.opener || event.source !== window.opener || !isAllowedDemoOrigin(event.origin) || event.data?.type !== "simsafe:campaign-delivered") return;
   const { campaign, target } = event.data;
   if (!campaign || !target || typeof campaign.campaignId !== "string" || typeof campaign.subject !== "string" || typeof campaign.emailHtml !== "string") return;
   if (typeof target.token !== "string" || typeof target.landingUrl !== "string") return;
-  if (messages.some((message) => message.campaignId === campaign.campaignId)) return;
+  const acknowledgeDelivery = () => event.source.postMessage({
+    type: "simsafe:delivery-ack",
+    campaignId: campaign.campaignId,
+    token: target.token
+  }, event.origin);
+  const existing = messages.find((message) => message.campaignId === campaign.campaignId);
+  if (existing) {
+    if (existing.token === target.token) acknowledgeDelivery();
+    return;
+  }
 
   const generatedMessage = {
     id: `campaign-${campaign.campaignId}`,
@@ -632,6 +652,7 @@ function receiveGeneratedCampaign(event) {
 
   messages.unshift(generatedMessage);
   renderList();
+  acknowledgeDelivery();
   document.title = "(1) 收到新郵件 — Postbox";
   showToast("收到 1 封新郵件");
   window.setTimeout(() => {
@@ -641,7 +662,10 @@ function receiveGeneratedCampaign(event) {
 }
 
 window.addEventListener("message", receiveGeneratedCampaign);
+window.addEventListener("message", receiveEventAcknowledgement);
 
 renderList();
 const initialId = new URLSearchParams(window.location.hash.slice(1)).get("mail");
 if (initialId) openMessage(initialId, false);
+// This readiness signal contains no campaign data; the admin validates origin and window identity.
+window.opener?.postMessage({ type: "simsafe:mailbox-ready" }, "*");

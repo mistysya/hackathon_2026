@@ -6,6 +6,8 @@ test("offline fixture demo completes and deduplicates interactions", async ({ pa
   page.on("request", req => { if (req.url().includes("/api/")) errors.push(`Unexpected API call: ${req.url()}`); });
   await page.goto("/");
   await expect(page.getByText("Fixture demo mode")).toBeVisible();
+  await expect(page.getByRole("button", { name: "開啟員工信箱 ↗" })).toBeDisabled();
+  await expect(page.getByText("信箱需 Go API；離線請使用下方員工視角。")).toBeVisible();
   await page.getByRole("button", { name: "生成安全演練" }).click();
   await page.getByRole("button", { name: "核准 Campaign", exact: true }).click();
   await page.getByRole("button", { name: "模擬寄送 →", exact: true }).click();

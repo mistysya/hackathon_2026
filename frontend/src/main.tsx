@@ -20,6 +20,11 @@ const eventText: Record<EventType, string> = {
 const sampleCsv = "employee_id,display_name,email,department,title,company\nE001,Demo User,demo.user@example.test,Engineering,Software Engineer,Demo Corp\nE002,Alex Chen,alex.chen@example.test,Product,Product Manager,Demo Corp\n";
 const mailboxUrl = import.meta.env.VITE_MAILBOX_URL || `${window.location.protocol}//${window.location.hostname}:4173/`;
 const mailboxOrigin = new URL(mailboxUrl, window.location.href).origin;
+type MailboxDelivery = {
+  campaign: GeneratedCampaign;
+  target: Simulation["targets"][number];
+  acknowledged: boolean;
+};
 
 function formatDate(value: string | null): string {
   return value ? new Intl.DateTimeFormat("zh-TW", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "—";
@@ -49,6 +54,10 @@ function FactRow({ fact }: { fact: PublicFact }) {
 function App() {
   const inputRef = useRef<HTMLInputElement>(null);
   const mailboxWindowRef = useRef<Window | null>(null);
+  const mailboxReadyRef = useRef(false);
+  const mailboxDeliveriesRef = useRef(new Map<string, MailboxDelivery>());
+  const pendingOpenedRef = useRef(new Set<string>());
+  const currentCampaignIdRef = useRef<string | undefined>(undefined);
   const [employees, setEmployees] = useState<EmployeeSummary[]>([]);
   const [selected, setSelected] = useState<Employee | null>(null);
   const [campaign, setCampaign] = useState<GeneratedCampaign | null>(api.usingFixtures ? demoCampaign : null);
@@ -62,6 +71,7 @@ function App() {
   const [notice, setNotice] = useState("準備好開始安全演練。");
   const [error, setError] = useState<string | null>(null);
 
+  currentCampaignIdRef.current = campaign?.campaignId;
   const activeTarget = simulation?.targets[0] ?? null;
   const landingUrl = activeTarget?.landingUrl ?? "{{landingUrl}}";
   const emailDocument = useMemo(() => campaign?.emailHtml.replaceAll("{{landingUrl}}", landingUrl) ?? "", [campaign, landingUrl]);
@@ -84,28 +94,44 @@ function App() {
   const loadReport = async (campaignId: string) => {
     try { setReport(await api.getReport(campaignId)); } catch (reason) { if (!(reason instanceof ApiError && reason.status === 404)) throw reason; setReport(null); }
   };
+  const flushMailboxDeliveries = () => {
+    const mailbox = mailboxWindowRef.current;
+    if (!mailbox || mailbox.closed || !mailboxReadyRef.current) return;
+    for (const delivery of mailboxDeliveriesRef.current.values()) {
+      if (!delivery.acknowledged) mailbox.postMessage({
+        type: "simsafe:campaign-delivered",
+        campaign: delivery.campaign,
+        target: delivery.target,
+      }, mailboxOrigin);
+    }
+  };
   const openEmployeeMailbox = () => {
+    if (api.usingFixtures) return;
+    const existing = mailboxWindowRef.current;
+    if (existing && !existing.closed) {
+      existing.focus();
+      flushMailboxDeliveries();
+      return;
+    }
     const mailbox = window.open(mailboxUrl, "simsafe-employee-mailbox");
     if (!mailbox) {
       setError("瀏覽器阻擋了員工信箱視窗，請允許彈出式視窗後再試一次。");
       return;
     }
     mailboxWindowRef.current = mailbox;
-    setNotice("員工信箱已開啟；模擬寄送後，新郵件會即時出現在收件匣頂端。");
+    mailboxReadyRef.current = false;
+    setNotice("員工信箱開啟中；載入完成後會自動投遞本次工作階段的模擬郵件。");
   };
-  const deliverToMailbox = (deliveredCampaign: GeneratedCampaign, deliveredSimulation: Simulation): boolean => {
-    const mailbox = mailboxWindowRef.current;
+  const deliverToMailbox = (deliveredCampaign: GeneratedCampaign, deliveredSimulation: Simulation) => {
+    if (api.usingFixtures) return;
     const target = deliveredSimulation.targets[0];
-    if (!mailbox || mailbox.closed || !target) return false;
-
-    const payload = {
-      type: "simsafe:campaign-delivered",
+    if (!target) return;
+    mailboxDeliveriesRef.current.set(deliveredCampaign.campaignId, {
       campaign: deliveredCampaign,
       target: { ...target, landingUrl: new URL(target.landingUrl, window.location.origin).href },
-    };
-    [0, 300, 900].forEach((delay) => window.setTimeout(() => mailbox.postMessage(payload, mailboxOrigin), delay));
-    window.setTimeout(() => mailbox.focus(), 100);
-    return true;
+      acknowledged: false,
+    });
+    flushMailboxDeliveries();
   };
 
   useEffect(() => {
@@ -117,20 +143,53 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (api.usingFixtures) return;
     const receiveMailboxEvent = (event: MessageEvent) => {
-      const data = event.data as { type?: string; campaignId?: string; token?: string; eventType?: EventType };
-      if (event.origin !== mailboxOrigin || event.source !== mailboxWindowRef.current || data.type !== "simsafe:mailbox-event") return;
-      if (data.eventType !== "opened" || !data.token || data.campaignId !== campaign?.campaignId) return;
+      const data = event.data as { type?: string; campaignId?: string; token?: string; eventType?: EventType } | null;
+      const mailbox = mailboxWindowRef.current;
+      if (!mailbox || event.origin !== mailboxOrigin || event.source !== mailbox || !data) return;
+      if (data.type === "simsafe:mailbox-ready") {
+        mailboxReadyRef.current = true;
+        // A reloaded/reopened mailbox has no in-memory messages. Replay the same targets.
+        for (const delivery of mailboxDeliveriesRef.current.values()) delivery.acknowledged = false;
+        flushMailboxDeliveries();
+        return;
+      }
+      if (typeof data.campaignId !== "string" || typeof data.token !== "string") return;
+      const delivery = mailboxDeliveriesRef.current.get(data.campaignId);
+      if (!delivery || delivery.target.token !== data.token) return;
+      if (data.type === "simsafe:delivery-ack") {
+        const wasAcknowledged = delivery.acknowledged;
+        delivery.acknowledged = true;
+        if (!wasAcknowledged && currentCampaignIdRef.current === data.campaignId) setNotice("模擬寄送完成；新郵件已送達員工信箱。");
+        return;
+      }
+      if (data.type !== "simsafe:mailbox-event" || data.eventType !== "opened" || pendingOpenedRef.current.has(data.token)) return;
+      const { campaignId, token } = data;
+      pendingOpenedRef.current.add(token);
       void run("mailbox-opened", async () => {
-        await api.recordEvent(data.token!, "opened");
-        await loadReport(data.campaignId!);
-        setEmailOpened(true);
-        setNotice("員工已開啟新郵件；opened 事件已記錄。");
+        try {
+          await api.recordEvent(token, "opened");
+          mailbox.postMessage({ type: "simsafe:event-ack", campaignId, token, eventType: "opened" }, mailboxOrigin);
+          // Persist events for every delivered campaign, but only update the active dashboard.
+          if (currentCampaignIdRef.current !== campaignId) return;
+          const nextReport = await api.getReport(campaignId);
+          if (currentCampaignIdRef.current !== campaignId) return;
+          setReport(nextReport);
+          setEmailOpened(true);
+          setNotice("員工已開啟新郵件；opened 事件已記錄。");
+        } finally {
+          pendingOpenedRef.current.delete(token);
+        }
       });
     };
     window.addEventListener("message", receiveMailboxEvent);
-    return () => window.removeEventListener("message", receiveMailboxEvent);
-  }, [campaign?.campaignId]);
+    const retryTimer = window.setInterval(flushMailboxDeliveries, 1000);
+    return () => {
+      window.removeEventListener("message", receiveMailboxEvent);
+      window.clearInterval(retryTimer);
+    };
+  }, []);
 
   const importCsv = async (file: File) => {
     await run("import", async () => {
@@ -171,11 +230,11 @@ function App() {
     const next = await api.simulate(campaign.campaignId);
     const deliveredCampaign: GeneratedCampaign = { ...campaign, status: "simulated" };
     setSimulation(next); setCampaign(deliveredCampaign); setEmailOpened(false); setLandingOpen(false); setTrainingRevealed(false);
+    deliverToMailbox(deliveredCampaign, next);
+    setNotice(api.usingFixtures
+      ? "模擬寄送完成，請使用下方員工視角完成離線演練。"
+      : "模擬寄送完成，郵件等待信箱確認收件；若尚未開啟，請點選「開啟員工信箱」。");
     await loadReport(campaign.campaignId);
-    const delivered = deliverToMailbox(deliveredCampaign, next);
-    setNotice(delivered
-      ? "模擬寄送完成；新郵件已送達員工信箱。"
-      : "模擬寄送完成。開啟員工信箱後需再次產生 Campaign 才能展示即時送達。");
   });
   const record = (eventType: EventType, after?: () => void) => activeTarget && run(`event-${eventType}`, async () => {
     await api.recordEvent(activeTarget.token, eventType);
@@ -219,7 +278,7 @@ function App() {
         <div className="step-footer"><span>資料最小化：公開事實須保留來源；推論不會當作已確認事實。</span><button onClick={generate} disabled={!selected?.profile || Boolean(busy)}>{busy === "generate" ? "生成中…" : "生成安全演練"} <span>→</span></button></div>
       </section>
 
-      <section id="review" className="panel review-panel"><div className="panel-heading"><div><p className="eyebrow">02 / HUMAN REVIEW</p><h2>Agent 決策與內容審核</h2></div><div className="actions">{campaign && <span className={`status ${campaign.status}`}>{statusText[campaign.status]}</span>}<button className="secondary" onClick={openEmployeeMailbox}>開啟員工信箱 ↗</button></div></div>{campaign ? <div className="review-grid"><div><div className="decision"><span className="icon">✦</span><div><p className="eyebrow">RECOMMENDED SCENARIO</p><h3>{campaign.templateId} <span className="difficulty">{campaign.difficulty}</span></h3><p>{campaign.decisionReason}</p></div></div><div className="campaign-provenance"><p className="eyebrow">CAMPAIGN TARGET</p><h4>{campaignEmployee?.employeeId === campaign.employeeId ? `${campaignEmployee.displayName} · ${campaign.employeeId}` : campaign.employeeId}</h4><p className="provenance-label">生成內容使用的公開資訊與來源</p>{campaignProfile ? campaignProfile.publicFacts.length ? campaignProfile.publicFacts.map((fact) => <FactRow key={`${fact.fact}-${fact.sourceUrl ?? "unknown"}`} fact={fact} />) : <p className="empty">此 Profile 沒有可回報的公開事實。</p> : <p className="safety-blocker">無法確認此 Campaign 對應的 Profile，禁止核准。</p>}</div><div className="checks"><h4>安全規則檢查</h4>{campaign.safetyChecks.map((check) => <div key={check.rule} className={check.passed ? "passed" : "failed"}><span>{check.passed ? "✓" : "!"}</span><code>{check.rule}</code><small>{check.passed ? "passed" : check.detail ?? "failed"}</small></div>)}{!safetyChecksPassed && <p className="safety-blocker">安全規則尚未全部通過，必須拒絕或重新生成內容。</p>}</div><div className="review-actions">{campaign.status === "pending_review" && <><button className="danger-outline" onClick={reject} disabled={Boolean(busy)}>拒絕</button><button onClick={approve} disabled={Boolean(busy) || !canApprove} title={!canApprove ? "需確認 Profile 且所有安全規則通過" : undefined}>核准 Campaign</button></>}{campaign.status === "approved" && <button onClick={simulate} disabled={Boolean(busy)}>{busy === "simulate" ? "建立 token 中…" : "模擬寄送 →"}</button>}{campaign.status === "simulated" && <span className="success-text">✓ 已建立受控 Landing URL</span>}{campaign.status === "rejected" && <span className="rejected-text">拒絕原因：{campaign.rejectionReason}</span>}</div></div><div className="preview"><div className="preview-header"><span>信件預覽</span><b>Subject: {campaign.subject}</b></div><iframe title="安全信件預覽" sandbox="" inert srcDoc={emailDocument} /></div><div className="landing-card"><p className="eyebrow">LANDING PAGE PREVIEW</p><h3>{campaign.landingConfig.brand}</h3><h4>{campaign.landingConfig.title}</h4><p>{campaign.landingConfig.description}</p><button disabled>{campaign.landingConfig.ctaLabel}</button><small>測試品牌 · Dummy Form · 不收集帳密</small></div></div> : <div className="empty large">先完成 Profile 後，建立可人工核准的 Campaign。</div>}</section>
+      <section id="review" className="panel review-panel"><div className="panel-heading"><div><p className="eyebrow">02 / HUMAN REVIEW</p><h2>Agent 決策與內容審核</h2></div><div className="actions">{campaign && <span className={`status ${campaign.status}`}>{statusText[campaign.status]}</span>}<button className="secondary" onClick={openEmployeeMailbox} disabled={api.usingFixtures} title={api.usingFixtures ? "員工信箱僅支援 Go API 模式；離線展示請使用下方員工視角。" : undefined}>開啟員工信箱 ↗</button>{api.usingFixtures && <small>信箱需 Go API；離線請使用下方員工視角。</small>}</div></div>{campaign ? <div className="review-grid"><div><div className="decision"><span className="icon">✦</span><div><p className="eyebrow">RECOMMENDED SCENARIO</p><h3>{campaign.templateId} <span className="difficulty">{campaign.difficulty}</span></h3><p>{campaign.decisionReason}</p></div></div><div className="campaign-provenance"><p className="eyebrow">CAMPAIGN TARGET</p><h4>{campaignEmployee?.employeeId === campaign.employeeId ? `${campaignEmployee.displayName} · ${campaign.employeeId}` : campaign.employeeId}</h4><p className="provenance-label">生成內容使用的公開資訊與來源</p>{campaignProfile ? campaignProfile.publicFacts.length ? campaignProfile.publicFacts.map((fact) => <FactRow key={`${fact.fact}-${fact.sourceUrl ?? "unknown"}`} fact={fact} />) : <p className="empty">此 Profile 沒有可回報的公開事實。</p> : <p className="safety-blocker">無法確認此 Campaign 對應的 Profile，禁止核准。</p>}</div><div className="checks"><h4>安全規則檢查</h4>{campaign.safetyChecks.map((check) => <div key={check.rule} className={check.passed ? "passed" : "failed"}><span>{check.passed ? "✓" : "!"}</span><code>{check.rule}</code><small>{check.passed ? "passed" : check.detail ?? "failed"}</small></div>)}{!safetyChecksPassed && <p className="safety-blocker">安全規則尚未全部通過，必須拒絕或重新生成內容。</p>}</div><div className="review-actions">{campaign.status === "pending_review" && <><button className="danger-outline" onClick={reject} disabled={Boolean(busy)}>拒絕</button><button onClick={approve} disabled={Boolean(busy) || !canApprove} title={!canApprove ? "需確認 Profile 且所有安全規則通過" : undefined}>核准 Campaign</button></>}{campaign.status === "approved" && <button onClick={simulate} disabled={Boolean(busy)}>{busy === "simulate" ? "建立 token 中…" : "模擬寄送 →"}</button>}{campaign.status === "simulated" && <span className="success-text">✓ 已建立受控 Landing URL</span>}{campaign.status === "rejected" && <span className="rejected-text">拒絕原因：{campaign.rejectionReason}</span>}</div></div><div className="preview"><div className="preview-header"><span>信件預覽</span><b>Subject: {campaign.subject}</b></div><iframe title="安全信件預覽" sandbox="" inert srcDoc={emailDocument} /></div><div className="landing-card"><p className="eyebrow">LANDING PAGE PREVIEW</p><h3>{campaign.landingConfig.brand}</h3><h4>{campaign.landingConfig.title}</h4><p>{campaign.landingConfig.description}</p><button disabled>{campaign.landingConfig.ctaLabel}</button><small>測試品牌 · Dummy Form · 不收集帳密</small></div></div> : <div className="empty large">先完成 Profile 後，建立可人工核准的 Campaign。</div>}</section>
 
       <section id="simulation" className="panel simulation-panel">
         <div className="panel-heading"><div><p className="eyebrow">03 / EMPLOYEE VIEW</p><h2>模擬信件與受控 Landing</h2></div>{activeTarget && <code className="token">token · {activeTarget.token.slice(0, 10)}…</code>}</div>

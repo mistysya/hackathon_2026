@@ -13,6 +13,7 @@ export default defineConfig({
   projects: [
     { name: "real-api", testMatch: "demo.spec.ts", use: { baseURL: "http://127.0.0.1:15173" } },
     { name: "fixtures", testMatch: "fixtures.spec.ts", use: { baseURL: "http://127.0.0.1:15174" } },
+    { name: "mailbox", testMatch: "mailbox.spec.ts", use: { baseURL: "http://127.0.0.1:15173" } },
   ],
   webServer: [
     ...(!externalAPI ? [{
@@ -23,13 +24,17 @@ export default defineConfig({
     }] : []),
     {
       command: "npm run dev -- --host 127.0.0.1 --port 15173 --strictPort",
-      env: { VITE_USE_FIXTURES: "false", API_PROXY_TARGET: apiURL },
+      env: { VITE_USE_FIXTURES: "false", API_PROXY_TARGET: apiURL, VITE_MAILBOX_URL: "http://127.0.0.1:14173/" },
       url: "http://127.0.0.1:15173",
     },
     {
       command: "npm run dev -- --host 127.0.0.1 --port 15174 --strictPort",
       env: { VITE_USE_FIXTURES: "true" },
       url: "http://127.0.0.1:15174",
+    },
+    {
+      command: "python3 -m http.server 14173 --bind 127.0.0.1 --directory ../presentation",
+      url: "http://127.0.0.1:14173",
     },
   ],
 });
