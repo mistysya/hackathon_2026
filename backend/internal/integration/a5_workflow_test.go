@@ -2,9 +2,9 @@ package integration
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
-	"database/sql"
 	"io"
 	"log/slog"
 	"net/http"
@@ -86,7 +86,7 @@ func TestA5WorkflowEndToEnd(t *testing.T) {
 	if code != http.StatusConflict {
 		t.Fatalf("generate before enrich status = %d, want 409", code)
 	}
-	if generateEnvelope.Code != "profile_required" || generateEnvelope.RequestID == "" {
+	if generateEnvelope.Error.Code != "profile_required" || generateEnvelope.Error.RequestID == "" {
 		t.Fatalf("generate before enrich envelope = %#v", generateEnvelope)
 	}
 
@@ -137,11 +137,11 @@ func TestA5WorkflowEndToEnd(t *testing.T) {
 	}
 
 	unknownGen := doGenerateRequestEnvelope(t, server, "E999")
-	if unknownGen.Code != "employee_not_found" || unknownGen.RequestID == "" {
+	if unknownGen.Error.Code != "employee_not_found" || unknownGen.Error.RequestID == "" {
 		t.Fatalf("unknown employee envelope = %#v", unknownGen)
 	}
 	unknownCampaign := doGetCampaignEnvelope(t, server, "c_unknown")
-	if unknownCampaign.Code != "campaign_not_found" || unknownCampaign.RequestID == "" {
+	if unknownCampaign.Error.Code != "campaign_not_found" || unknownCampaign.Error.RequestID == "" {
 		t.Fatalf("unknown campaign envelope = %#v", unknownCampaign)
 	}
 
