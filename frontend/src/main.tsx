@@ -103,7 +103,7 @@ function App() {
 
   const enrich = () => selected && run("enrich", async () => {
     const profile = await api.enrich(selected.employeeId);
-    setSelected({ ...selected, hasProfile: true, profile });
+    setSelected({ ...selected, profile });
     setEmployees((items) => items.map((item) => item.employeeId === selected.employeeId ? { ...item, hasProfile: true } : item));
     setNotice("Profile 已更新；公開事實已標示來源狀態，未知來源會標記為 unverified。");
   });

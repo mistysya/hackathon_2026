@@ -38,8 +38,8 @@ let report: CampaignReport | null = null;
 let simulation: Simulation | null = null;
 
 function summary(employee: Employee): EmployeeSummary {
-  const { employeeId, displayName, department, title, hasProfile } = employee;
-  return { employeeId, displayName, department, title, hasProfile };
+  const { employeeId, displayName, department, title, profile } = employee;
+  return { employeeId, displayName, department, title, hasProfile: profile !== null };
 }
 
 function now(): string {
@@ -107,24 +107,29 @@ export const api = {
     if (!useFixtures) {
       return request<ImportResult>("/employees/import", { method: "POST", headers: { "Content-Type": "text/csv" }, body: csv });
     }
-    const rows = csv.trim().split(/\r?\n/);
+    const rows = csv.replace(/^\uFEFF/, "").trim().split(/\r?\n/);
     if (rows.length < 2) throw new ApiError("CSV 至少需要標題列與一筆資料", 400);
     const headers = rows[0].split(",").map((item) => item.trim());
     const required = ["employee_id", "display_name", "email", "department", "title", "company"];
     if (required.some((field) => !headers.includes(field))) throw new ApiError("CSV 欄位不符合 API 契約", 400);
     const errors: ImportResult["errors"] = [];
     let imported = 0;
-    rows.slice(1).filter(Boolean).forEach((row, index) => {
+    rows.slice(1).forEach((row, index) => {
+      if (!row.trim()) return;
       const values = row.split(",").map((item) => item.trim());
       const value = (field: string) => values[headers.indexOf(field)] ?? "";
       const employeeId = value("employee_id");
-      if (!employeeId || employees.some((item) => item.employeeId === employeeId)) {
+      if (!employeeId) {
+        errors.push({ row: index + 2, reason: "employee_id is required" });
+        return;
+      }
+      if (employees.some((item) => item.employeeId === employeeId)) {
         errors.push({ row: index + 2, reason: "duplicate employee_id" });
         return;
       }
       employees.push({
         employeeId, displayName: value("display_name"), email: value("email"), department: value("department"),
-        title: value("title"), company: value("company"), hasProfile: false, profile: null,
+        title: value("title"), company: value("company"), profile: null,
       });
       imported += 1;
     });
@@ -136,7 +141,6 @@ export const api = {
     const employee = employees.find((item) => item.employeeId === employeeId);
     if (!employee) throw new ApiError("找不到該員工", 404);
     employee.profile = fixtureProfile(employee);
-    employee.hasProfile = true;
     return clone(employee.profile);
   },
 

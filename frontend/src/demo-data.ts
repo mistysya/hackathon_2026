@@ -7,7 +7,6 @@ export const demoEmployee: Employee = {
   department: "Engineering",
   title: "Software Engineer",
   company: "Demo Corp",
-  hasProfile: true,
   profile: {
     employeeId: "E001",
     displayName: "Demo User",

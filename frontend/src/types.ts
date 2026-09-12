@@ -26,7 +26,7 @@ export type EmployeeSummary = {
   hasProfile: boolean;
 };
 
-export type Employee = EmployeeSummary & {
+export type Employee = Omit<EmployeeSummary, "hasProfile"> & {
   email: string;
   company: string;
   profile: EmployeeProfile | null;
