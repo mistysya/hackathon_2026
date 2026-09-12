@@ -46,12 +46,46 @@ function now(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>'"]/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#39;",
+    '"': "&quot;",
+  })[character]!);
+}
+
 function fixtureProfile(employee: Employee): EmployeeProfile {
+  const profile = clone(demoEmployee.profile!);
+  if (employee.employeeId !== demoEmployee.employeeId) {
+    profile.publicFacts[1] = {
+      fact: `公開職務頁面顯示與 ${employee.department || "跨部門"} 團隊相關`,
+      sourceUrl: "https://example.com/company/team-directory",
+      confidence: 0.72,
+      sourceType: "fixture",
+    };
+  }
   return {
-    ...clone(demoEmployee.profile!),
+    ...profile,
     employeeId: employee.employeeId,
     displayName: employee.displayName,
     department: employee.department,
+  };
+}
+
+function fixtureCampaign(employee: Employee): GeneratedCampaign {
+  const next = clone(demoCampaign);
+  return {
+    ...next,
+    campaignId: `c_${crypto.randomUUID().replaceAll("-", "")}`,
+    employeeId: employee.employeeId,
+    templateId: employee.profile?.recommendedScenario ?? next.templateId,
+    emailHtml: next.emailHtml.replaceAll("Demo User", () => escapeHtml(employee.displayName || "同仁")),
+    status: "pending_review",
+    approvedBy: null,
+    approvedAt: null,
+    rejectionReason: null,
   };
 }
 
@@ -110,7 +144,7 @@ export const api = {
     if (!useFixtures) return request<GeneratedCampaign>("/campaigns/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ employeeId }) });
     const employee = employees.find((item) => item.employeeId === employeeId);
     if (!employee?.profile) throw new ApiError("請先建立 Profile", 409);
-    campaign = { ...clone(demoCampaign), employeeId, campaignId: `c_${crypto.randomUUID().replaceAll("-", "")}`, status: "pending_review", approvedBy: null, approvedAt: null, rejectionReason: null };
+    campaign = fixtureCampaign(employee);
     report = null;
     simulation = null;
     return clone(campaign);
@@ -119,6 +153,7 @@ export const api = {
   async approve(campaignId: string, approvedBy: string): Promise<GeneratedCampaign> {
     if (!useFixtures) return request<GeneratedCampaign>(`/campaigns/${encodeURIComponent(campaignId)}/approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ approvedBy }) });
     if (!campaign || campaign.campaignId !== campaignId || campaign.status !== "pending_review") throw new ApiError("Campaign 目前不可核准", 409);
+    if (!campaign.safetyChecks.length || campaign.safetyChecks.some((check) => !check.passed)) throw new ApiError("安全規則尚未全部通過，Campaign 不可核准", 409);
     campaign = { ...campaign, status: "approved", approvedBy, approvedAt: now() };
     return clone(campaign);
   },
