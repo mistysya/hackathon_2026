@@ -39,7 +39,7 @@ func (agent *OpenAIScenarioAgent) Generate(ctx context.Context, input ports.Scen
 	if agent == nil || agent.client == nil {
 		return nil, fmt.Errorf("%w: scenario client unavailable", openaiapi.ErrConfiguration)
 	}
-	instructions := "Create copy only for a safe, local Security Awareness Demo. Never create HTML, CSS, JavaScript, URLs, login forms, credential requests, real organization brands, or real sender addresses. Choose only a listed template and its matching demo sender persona."
+	instructions := "Create neutral, plain-text training copy only for a safe local Security Awareness Demo. Use exactly one matching template and sender persona: event_followup=demo_events; training_reminder=demo_learning; benefit_update=demo_people_ops; saas_security_notice=demo_security. Use one to three short email-body paragraphs, no real organization brands, and no sender address. Every output string must avoid these literal strings: <, >, http://, https://, javascript:, password, credential, 登入, 密碼, 帳密, gmail, google."
 	if feedback != nil && strings.TrimSpace(feedback.Message) != "" {
 		instructions += " Correct this schema or policy issue: " + truncateScenarioFeedback(feedback.Message)
 	}
@@ -57,15 +57,18 @@ func (agent *OpenAIScenarioAgent) Generate(ctx context.Context, input ports.Scen
 		DecisionReason                     string   `json:"decisionReason"`
 	}
 	if err := jsonutil.DecodeStrict(bytes.NewReader(raw), &output); err != nil {
-		return nil, &openaiapi.ProviderError{Kind: openaiapi.ErrorOutput}
+		return nil, &openaiapi.ProviderError{Kind: openaiapi.ErrorOutput, Code: "scenario_decode"}
 	}
 	entry, ok := senderCatalog[output.TemplateID]
-	if !ok || entry.Persona != output.SenderPersona || !safeCopy(output) {
-		return nil, &openaiapi.ProviderError{Kind: openaiapi.ErrorOutput}
+	if !ok || entry.Persona != output.SenderPersona {
+		return nil, &openaiapi.ProviderError{Kind: openaiapi.ErrorOutput, Code: "scenario_catalog"}
+	}
+	if code := safeCopyFailureCode(output); code != "" {
+		return nil, &openaiapi.ProviderError{Kind: openaiapi.ErrorOutput, Code: code}
 	}
 	email, err := renderLiveEmail(input.Employee.DisplayName, output.EmailBody, output.CTALabel)
 	if err != nil {
-		return nil, &openaiapi.ProviderError{Kind: openaiapi.ErrorOutput}
+		return nil, &openaiapi.ProviderError{Kind: openaiapi.ErrorOutput, Code: "scenario_render"}
 	}
 	generated := scenarioOutput{
 		TemplateID: output.TemplateID, Difficulty: entry.Difficulty, Subject: strings.TrimSpace(output.Subject), EmailHTML: email,
@@ -110,23 +113,37 @@ func safeCopy(output struct {
 	LandingDescription                 string   `json:"landingDescription"`
 	DecisionReason                     string   `json:"decisionReason"`
 }) bool {
-	values := append(append([]string{output.Subject, output.CTALabel, output.LandingTitle, output.LandingDescription, output.DecisionReason}, output.EmailBody...), "")
+	return safeCopyFailureCode(output) == ""
+}
+
+func safeCopyFailureCode(output struct {
+	TemplateID, SenderPersona, Subject string
+	EmailBody                          []string `json:"emailBody"`
+	CTALabel                           string   `json:"ctaLabel"`
+	LandingTitle                       string   `json:"landingTitle"`
+	LandingDescription                 string   `json:"landingDescription"`
+	DecisionReason                     string   `json:"decisionReason"`
+}) string {
+	values := append([]string{output.Subject, output.CTALabel, output.LandingTitle, output.LandingDescription, output.DecisionReason}, output.EmailBody...)
 	if len(output.EmailBody) == 0 || len(output.EmailBody) > 6 {
-		return false
+		return "scenario_body_count"
 	}
 	for _, value := range values {
 		trimmed := strings.TrimSpace(value)
-		if trimmed == "" || utf8.RuneCountInString(trimmed) > 500 {
-			return false
+		if trimmed == "" {
+			return "scenario_empty_field"
+		}
+		if utf8.RuneCountInString(trimmed) > 500 {
+			return "scenario_field_too_long"
 		}
 		lowered := strings.ToLower(trimmed)
 		for _, blocked := range []string{"<", ">", "http://", "https://", "javascript:", "password", "credential", "登入", "密碼", "帳密", "gmail", "google"} {
 			if strings.Contains(lowered, blocked) {
-				return false
+				return "scenario_prohibited_term"
 			}
 		}
 	}
-	return true
+	return ""
 }
 
 func truncateScenarioFeedback(value string) string {

@@ -80,4 +80,53 @@ func TestStructuredResponseDoesNotFallbackCanceledContext(t *testing.T) {
 	}
 }
 
+func TestStructuredResponsePropagatesCancellationDuringBodyRead(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client, err := NewHTTPClient(Config{APIKey: "key", Model: "model", BaseURL: "https://example.test", Timeout: time.Second}, &http.Client{
+		Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusOK, Body: cancelingReadCloser{cancel: cancel}}, nil
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = client.StructuredResponse(ctx, Request{SchemaName: "test", Schema: json.RawMessage(`{}`)})
+	if !errors.Is(err, context.Canceled) || IsFallbackEligible(err) {
+		t.Fatalf("err = %v, want non-fallback context.Canceled", err)
+	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (function roundTripperFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return function(request)
+}
+
+type cancelingReadCloser struct{ cancel context.CancelFunc }
+
+func (body cancelingReadCloser) Read([]byte) (int, error) {
+	body.cancel()
+	return 0, errors.New("simulated body read failure")
+}
+
+func (cancelingReadCloser) Close() error { return nil }
+
 func asProvider(err error, target **ProviderError) bool { return errors.As(err, target) }
+
+func TestStructuredResponseFallsBackOnProviderTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		_, _ = w.Write([]byte(`{"id":"resp","model":"model","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"{}"}]}]}`))
+	}))
+	defer server.Close()
+	client, err := NewHTTPClient(Config{APIKey: "key", Model: "model", BaseURL: server.URL, Timeout: 20 * time.Millisecond}, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = client.StructuredResponse(context.Background(), Request{SchemaName: "test", Schema: json.RawMessage(`{}`)})
+	var provider *ProviderError
+	if !IsFallbackEligible(err) || !asProvider(err, &provider) || provider.Kind != ErrorTransient {
+		t.Fatalf("provider timeout err=%v want fallback-eligible transient", err)
+	}
+}

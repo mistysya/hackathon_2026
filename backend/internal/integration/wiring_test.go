@@ -173,3 +173,18 @@ func TestNewRouterLiveRequiredDoesNotFallback(t *testing.T) {
 		t.Fatalf("live_required enrich status=%d body=%s", status, body)
 	}
 }
+
+func TestNewRouterAutoWithoutKeyUsesFixture(t *testing.T) {
+	database, _ := newSQLiteRepository(t)
+	router, err := NewRouter(database, slog.New(slog.NewTextHandler(io.Discard, nil)), openaiapi.Config{Mode: openaiapi.ModeAuto}, nil)
+	if err != nil {
+		t.Fatalf("NewRouter: %v", err)
+	}
+	server := httptest.NewServer(router)
+	defer server.Close()
+	doImportRequest(t, server, "employee_id,display_name,email,department,title,company\nE001,Demo User,demo@example.test,Engineering,Engineer,Demo Corp\n")
+	profile := doEnrichRequest(t, server, "E001")
+	if len(profile.PublicFacts) == 0 || profile.PublicFacts[0].SourceType != domain.SourceTypeFixture {
+		t.Fatalf("auto-without-key profile facts=%#v want fixture source", profile.PublicFacts)
+	}
+}
