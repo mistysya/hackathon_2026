@@ -80,7 +80,7 @@ func (agent *FixtureScenarioAgent) Generate(_ context.Context, input ports.Scena
 	if agent == nil {
 		return nil, fmt.Errorf("fixture scenario agent is nil")
 	}
-	templateID := input.Profile.RecommendedScenario
+	templateID := personalizeScenario(input).PreferredTemplate
 	fixture, ok := agent.fixtures[templateID]
 	if !ok {
 		fixture = agent.fixtures[defaultTemplateID]

@@ -22,13 +22,13 @@ func NewRepository(db *sql.DB) *Repository {
 
 func (r *Repository) LandingPage(ctx context.Context, token string) (LandingPageData, error) {
 	const query = `
-SELECT t.campaign_id, c.landing_config_json
+SELECT t.campaign_id, c.template_id, c.landing_config_json, e.department, e.title
 FROM campaign_targets t
 JOIN campaigns c ON c.id = t.campaign_id
+JOIN employees e ON e.employee_id = t.employee_id
 WHERE t.token = ? AND c.status = 'simulated'`
-	var campaignID string
-	var rawConfig string
-	if err := r.db.QueryRowContext(ctx, query, token).Scan(&campaignID, &rawConfig); err != nil {
+	var campaignID, templateID, rawConfig, department, title string
+	if err := r.db.QueryRowContext(ctx, query, token).Scan(&campaignID, &templateID, &rawConfig, &department, &title); err != nil {
 		if err == sql.ErrNoRows {
 			return LandingPageData{}, ErrNotFound
 		}
@@ -44,15 +44,24 @@ WHERE t.token = ? AND c.status = 'simulated'`
 	if rawConfig != "" {
 		_ = json.Unmarshal([]byte(rawConfig), &config)
 	}
+	presentation := presentationFor(templateID, department, title)
 	return LandingPageData{
-		Token:          token,
-		Title:          config.Title,
-		Brand:          config.Brand,
-		Description:    config.Description,
-		CTALabel:       config.CTALabel,
-		EventEndpoint:  "/events",
-		CampaignID:     campaignID,
-		EducationTitle: "這是一場受控資安演練",
+		Token:                token,
+		Title:                config.Title,
+		Brand:                config.Brand,
+		Description:          config.Description,
+		CTALabel:             config.CTALabel,
+		EventEndpoint:        "/events",
+		CampaignID:           campaignID,
+		EducationTitle:       "This was a controlled security exercise",
+		Theme:                presentation.Theme,
+		PortalLabel:          presentation.PortalLabel,
+		Audience:             presentation.Audience,
+		FormHeading:          presentation.FormHeading,
+		PrimaryLabel:         presentation.PrimaryLabel,
+		PrimaryPlaceholder:   presentation.PrimaryPlaceholder,
+		SecondaryLabel:       presentation.SecondaryLabel,
+		SecondaryPlaceholder: presentation.SecondaryPlaceholder,
 	}, nil
 }
 
