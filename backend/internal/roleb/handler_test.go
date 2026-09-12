@@ -203,6 +203,49 @@ func TestCampaignReportReturnsNotFound(t *testing.T) {
 	}
 }
 
+func TestCampaignReportReturnsEmptyReportForCampaignWithoutTargetsOrEvents(t *testing.T) {
+	db, handler := testServer(t)
+	defer db.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/c_demo", nil)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", res.Code, res.Body.String())
+	}
+
+	var report domain.CampaignReport
+	if err := json.NewDecoder(res.Body).Decode(&report); err != nil {
+		t.Fatalf("decode report: %v", err)
+	}
+	if report.TargetCount != 0 || report.Funnel != (domain.CampaignFunnel{}) {
+		t.Fatalf("unexpected empty report counts: %+v", report)
+	}
+	if report.Events == nil || len(report.Events) != 0 {
+		t.Fatalf("events = %#v, want a non-nil empty slice", report.Events)
+	}
+}
+
+func TestCampaignReportRejectsInvalidStoredData(t *testing.T) {
+	db, handler := testServer(t)
+	defer db.Close()
+	if _, err := db.Exec(`
+INSERT INTO tracking_events (campaign_id, employee_id, event_type, occurred_at)
+VALUES ('c_demo', 'E001', 'opened', '2026-09-12T18:00:00+08:00')`); err != nil {
+		t.Fatalf("seed invalid event: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/c_demo", nil)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d body=%s", res.Code, res.Body.String())
+	}
+	if !strings.Contains(res.Body.String(), `"code":"internal_error"`) {
+		t.Fatalf("unexpected error body: %s", res.Body.String())
+	}
+}
+
 func TestPostEventRejectsMissingTokenAsNotFound(t *testing.T) {
 	db, handler := testServer(t)
 	defer db.Close()
