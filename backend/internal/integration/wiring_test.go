@@ -125,7 +125,7 @@ func TestNewRouterAutoUsesLiveResponsesAndFallsBack(t *testing.T) {
 				output := map[string]string{
 					"public_evidence":  `{"evidence":[{"fact":"Speaker at a public event","sourceUrl":"https://example.test/event","tags":["event"]}]}`,
 					"profile_analysis": `{"riskSignals":["Public event follow-up is suitable."],"recommendedScenario":"event_followup"}`,
-					"campaign_copy":    `{"templateId":"event_followup","senderPersona":"demo_events","subject":"Demo follow-up","emailBody":["Please review this demo."],"ctaLabel":"Open demo","landingTitle":"Demo follow-up","landingDescription":"A controlled test.","decisionReason":"Public event reminder."}`,
+					"campaign_copy":    `{"templateId":"saas_security_notice","senderPersona":"demo_security","subject":"Developer workspace live review","emailBody":["Review access to the build pipeline."],"ctaLabel":"Review workspace","landingTitle":"Developer workspace review","landingDescription":"A controlled project-access review.","decisionReason":"A workspace review suits this technical role."}`,
 				}[request.Text.Format.Name]
 				_, _ = w.Write([]byte(`{"id":"resp_test","model":"test-model","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":` + toJSONString(output) + `}]}]}`))
 			}))
@@ -146,6 +146,9 @@ func TestNewRouterAutoUsesLiveResponsesAndFallsBack(t *testing.T) {
 			campaign := doGenerateRequestOK(t, server, "E001")
 			if campaign.Status != domain.CampaignStatusPendingReview {
 				t.Fatalf("campaign=%#v", campaign)
+			}
+			if test.name == "live success" && campaign.Subject != "Developer workspace live review" {
+				t.Fatalf("live campaign subject=%q", campaign.Subject)
 			}
 			if calls.Load() != 3 {
 				t.Fatalf("provider calls=%d want 3", calls.Load())

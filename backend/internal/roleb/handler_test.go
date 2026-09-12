@@ -124,8 +124,11 @@ func TestLandingPageRecordsClickedOnlyAndRevealsEducationOnSubmit(t *testing.T) 
 		"sendEvent(\"clicked\")",
 		"sendEvent(\"form_attempted\")",
 		"sendEvent(\"training_viewed\")",
-		"表單欄位沒有 name 屬性",
-		"這是一場受控資安演練",
+		`class="theme-event"`,
+		"Event resources",
+		"Engineering · Software Engineer",
+		"these fields have no name attributes",
+		"This was a controlled security exercise",
 	}
 	for _, want := range checks {
 		if !strings.Contains(html, want) {
@@ -134,6 +137,27 @@ func TestLandingPageRecordsClickedOnlyAndRevealsEducationOnSubmit(t *testing.T) 
 	}
 	if strings.Contains(html, "sendEvent(\"opened\")") {
 		t.Fatal("landing page must not record opened; email preview owns that event")
+	}
+}
+
+func TestLandingPageUsesTechnicalWorkspacePresentation(t *testing.T) {
+	db, handler := testServer(t)
+	defer db.Close()
+	_, err := db.Exec(`UPDATE campaigns SET status = 'simulated', template_id = 'saas_security_notice' WHERE id = 'c_demo'; INSERT INTO campaign_targets (campaign_id, employee_id, token) VALUES ('c_demo', 'E001', 'tok_technical');`)
+	if err != nil {
+		t.Fatalf("seed target: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/landing/tok_technical", nil)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", res.Code, res.Body.String())
+	}
+	for _, want := range []string{`class="theme-developer"`, "Developer workspace", "Review project workspace access", "DEV-ACCESS-0000"} {
+		if !strings.Contains(res.Body.String(), want) {
+			t.Fatalf("technical landing html missing %q", want)
+		}
 	}
 }
 

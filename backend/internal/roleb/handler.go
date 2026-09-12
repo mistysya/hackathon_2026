@@ -96,48 +96,76 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 var landingTemplate = template.Must(template.New("landing").Parse(`<!doctype html>
-<html lang="zh-Hant">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{.Title}}</title>
   <style>
-    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { margin: 0; background: #f5f7fb; color: #172033; }
-    main { max-width: 760px; margin: 48px auto; padding: 0 20px; }
-    .card { background: #fff; border: 1px solid #d9e1f2; border-radius: 18px; box-shadow: 0 18px 50px rgba(23,32,51,.08); padding: 32px; }
-    .brand { color: #3557ff; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; font-size: 13px; }
-    h1 { margin: 10px 0 16px; font-size: 30px; }
-    label { display: block; margin: 18px 0 8px; font-weight: 600; }
-    input { box-sizing: border-box; width: 100%; padding: 12px 14px; border: 1px solid #b7c4dc; border-radius: 10px; font-size: 16px; }
-    button { margin-top: 22px; padding: 12px 18px; border: 0; border-radius: 999px; background: #3557ff; color: #fff; font-weight: 700; cursor: pointer; }
-    button:focus, input:focus { outline: 3px solid #aab8ff; outline-offset: 2px; }
-    .notice { margin-top: 24px; padding: 18px; border-radius: 14px; background: #eef8f1; border: 1px solid #afe3bd; }
-    .safety { margin-top: 18px; padding: 14px; border-radius: 12px; background: #fff8e5; border: 1px solid #f2d27a; }
+    :root { color-scheme: light; font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --accent: #2563eb; --accent-soft: #eff6ff; --ink: #172033; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top left, var(--accent-soft), #f8fafc 42%); color: var(--ink); }
+    body.theme-developer { --accent: #7c3aed; --accent-soft: #f3e8ff; }
+    body.theme-event { --accent: #0284c7; --accent-soft: #e0f2fe; }
+    body.theme-people { --accent: #db2777; --accent-soft: #fce7f3; }
+    main { max-width: 920px; margin: 54px auto; padding: 0 22px; }
+    .shell { overflow: hidden; background: rgba(255,255,255,.96); border: 1px solid #dbe3ef; border-radius: 22px; box-shadow: 0 24px 70px rgba(23,32,51,.13); }
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 18px 26px; color: #fff; background: #101827; }
+    .portal { display: flex; align-items: center; gap: 12px; font-weight: 760; }
+    .portal-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--accent); font-size: 15px; }
+    .simulation { padding: 6px 10px; border: 1px solid rgba(255,255,255,.35); border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+    .content { display: grid; grid-template-columns: 1.08fr .92fr; gap: 0; }
+    .intro, .form-panel { padding: 38px; }
+    .intro { border-right: 1px solid #e3e8f0; }
+    .brand { color: var(--accent); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
+    h1 { margin: 12px 0 16px; max-width: 600px; font-size: clamp(29px, 4vw, 42px); line-height: 1.08; letter-spacing: -.025em; }
+    h2 { margin: 0 0 8px; font-size: 21px; }
+    .description { color: #475569; font-size: 17px; line-height: 1.65; }
+    .audience { margin-top: 28px; padding: 15px 17px; border-radius: 14px; background: var(--accent-soft); }
+    .audience span { display: block; margin-bottom: 4px; color: #64748b; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+    .form-panel { background: #fbfcfe; }
+    label { display: block; margin: 18px 0 8px; font-size: 14px; font-weight: 700; }
+    input { width: 100%; padding: 13px 14px; border: 1px solid #b9c5d7; border-radius: 10px; background: #fff; font-size: 15px; }
+    button { width: 100%; margin-top: 22px; padding: 13px 18px; border: 0; border-radius: 10px; background: var(--accent); color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; }
+    button:focus, input:focus { outline: 3px solid color-mix(in srgb, var(--accent) 30%, transparent); outline-offset: 2px; }
+    .notice { grid-column: 1 / -1; margin: 0 38px 38px; padding: 20px; border-radius: 14px; background: #eefbf2; border: 1px solid #a9dfb9; }
+    .safety { margin-top: 22px; color: #64748b; font-size: 12px; line-height: 1.5; }
     .muted { color: #667085; }
+    @media (max-width: 720px) { .content { grid-template-columns: 1fr; } .intro { border-right: 0; border-bottom: 1px solid #e3e8f0; } .intro, .form-panel { padding: 28px; } .notice { margin: 0 28px 28px; } }
   </style>
 </head>
-<body>
+<body class="theme-{{.Theme}}">
 <main>
-  <section class="card">
-    <div class="brand">{{.Brand}}</div>
-    <h1>{{.Title}}</h1>
-    <p>{{.Description}}</p>
-    <div class="safety">
-      <strong>安全說明：</strong>此頁是 Hackathon 演練沙盒。表單欄位沒有 name 屬性，送出時不會把欄位值傳到後端；系統只記錄互動事件。
+  <section class="shell">
+    <header class="topbar">
+      <div class="portal"><span class="portal-mark">S</span>{{.PortalLabel}}</div>
+      <span class="simulation">SIMULATION</span>
+    </header>
+    <div class="content">
+      <section class="intro">
+        <div class="brand">{{.Brand}}</div>
+        <h1>{{.Title}}</h1>
+        <p class="description">{{.Description}}</p>
+        {{if .Audience}}<div class="audience"><span>Requested for</span><strong>{{.Audience}}</strong></div>{{end}}
+        <div class="safety"><strong>Safe demo:</strong> these fields have no name attributes, and their values are never transmitted or stored. Only interaction events are recorded.</div>
+      </section>
+      <section class="form-panel">
+        <h2>{{.FormHeading}}</h2>
+        <p class="muted">Use fictional test values only.</p>
+        <form id="dummy-form" autocomplete="off" novalidate>
+          <label for="demo-user">{{.PrimaryLabel}}</label>
+          <input id="demo-user" type="text" placeholder="{{.PrimaryPlaceholder}}">
+          <label for="demo-note">{{.SecondaryLabel}}</label>
+          <input id="demo-note" type="text" placeholder="{{.SecondaryPlaceholder}}">
+          <button type="submit">{{.CTALabel}}</button>
+        </form>
+      </section>
+      <section id="reveal" class="notice" hidden>
+        <h2>{{.EducationTitle}}</h2>
+        <p>You interacted with a simulated social-engineering page. In a real workflow, verify the sender, destination, and request through a trusted channel before continuing.</p>
+        <p class="muted">This exercise records only clicked, form_attempted, and training_viewed events. It never stores field values.</p>
+      </section>
     </div>
-    <form id="dummy-form" autocomplete="off" novalidate>
-      <label for="demo-user">測試使用者</label>
-      <input id="demo-user" type="text" placeholder="請勿輸入真實帳號或密碼">
-      <label for="demo-note">測試備註</label>
-      <input id="demo-note" type="text" placeholder="可留空；內容不會傳送">
-      <button type="submit">{{.CTALabel}}</button>
-    </form>
-    <section id="reveal" class="notice" hidden>
-      <h2>{{.EducationTitle}}</h2>
-      <p>你剛剛與一個模擬社交工程頁面互動。真實環境中，請在輸入資料前確認寄件者、網址、需求是否合理，並避免在非受信任頁面輸入密碼、MFA 或金融資料。</p>
-      <p class="muted">本次演練只記錄 clicked、form_attempted、training_viewed 等事件，不保存你在表單中的輸入值。</p>
-    </section>
   </section>
 </main>
 <script>

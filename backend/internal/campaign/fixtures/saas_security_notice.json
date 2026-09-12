@@ -1,10 +1,10 @@
 {
   "templateId": "saas_security_notice",
   "difficulty": "high",
-  "subject": "Security awareness notice for your SaaS workspace",
-  "emailHtml": "<p>Hello {{.DisplayName}},</p><p>A safe SaaS security notice training preview is ready.</p><p><a href=\"__LANDING_URL__\">Open preview</a></p>",
-  "landingConfig": {"title":"SaaS security notice","brand":"Security Awareness Demo","description":"A safe SaaS security awareness training preview.","ctaLabel":"Open preview"},
-  "decisionReason": "The profile recommends a controlled SaaS security notice training scenario.",
+  "subject": "Developer workspace access review",
+  "emailHtml": "<p>Hello {{.DisplayName}},</p><p>An access review is waiting for your development workspace. Confirm that your current project tools and build permissions are still required.</p><p>The review closes today so inactive access can be removed before the next deployment window.</p><p><a href=\"__LANDING_URL__\">Review workspace access</a></p>",
+  "landingConfig": {"title":"Developer workspace access review","brand":"Security Awareness Demo","description":"Review the fictional project workspace and confirm which development access should remain active.","ctaLabel":"Continue access review"},
+  "decisionReason": "A controlled developer-workspace review is relevant to technical roles without using a real product or requesting account secrets.",
   "safetyChecks": [
     {"rule":"no_real_credentials_requested","passed":true},
     {"rule":"no_sensitive_personal_data","passed":true},

@@ -51,6 +51,27 @@ func TestFixtureScenarioAgentRendersAllAllowlistedFixtures(t *testing.T) {
 	}
 }
 
+func TestFixtureScenarioAgentUsesTechnicalWorkspaceForEngineeringRoles(t *testing.T) {
+	agent, err := NewFixtureScenarioAgent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := agent.Generate(context.Background(), ports.ScenarioInput{
+		Employee: domain.Employee{DisplayName: "Arthur Tseng", Department: "Quant Engineering", Title: "Software Engineer"},
+		Profile:  domain.EmployeeProfile{RecommendedScenario: "event_followup"},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := decodeScenario(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output.TemplateID != "saas_security_notice" || !strings.Contains(output.Subject, "Developer workspace") || !strings.Contains(output.EmailHTML, "development workspace") {
+		t.Fatalf("technical fixture was not role-relevant: %#v", output)
+	}
+}
+
 func TestFixtureScenarioAgentFallsBackToTrainingReminder(t *testing.T) {
 	agent, err := NewFixtureScenarioAgent()
 	if err != nil {

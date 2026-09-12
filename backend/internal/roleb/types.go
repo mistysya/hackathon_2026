@@ -14,14 +14,22 @@ var (
 )
 
 type LandingPageData struct {
-	Token          string
-	Title          string
-	Brand          string
-	Description    string
-	CTALabel       string
-	EventEndpoint  string
-	CampaignID     string
-	EducationTitle string
+	Token                string
+	Title                string
+	Brand                string
+	Description          string
+	CTALabel             string
+	EventEndpoint        string
+	CampaignID           string
+	EducationTitle       string
+	Theme                string
+	PortalLabel          string
+	Audience             string
+	FormHeading          string
+	PrimaryLabel         string
+	PrimaryPlaceholder   string
+	SecondaryLabel       string
+	SecondaryPlaceholder string
 }
 
 type SimulateResponse struct {
