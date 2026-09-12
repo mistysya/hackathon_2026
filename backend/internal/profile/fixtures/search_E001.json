@@ -1,0 +1,16 @@
+[
+  {
+    "fact": "公開活動頁面顯示其參與公司資安意識訓練分享會。",
+    "sourceUrl": "https://example.test/events/security-awareness-e001",
+    "confidence": 0.92,
+    "sourceType": "fixture",
+    "tags": ["event", "public"]
+  },
+  {
+    "fact": "公開議程列出其所屬 Engineering 團隊參加資安實作工作坊。",
+    "sourceUrl": "https://example.test/events/engineering-workshop-e001",
+    "confidence": 0.81,
+    "sourceType": "fixture",
+    "tags": ["event", "training"]
+  }
+]
