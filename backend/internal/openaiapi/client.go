@@ -59,10 +59,11 @@ func (c *HTTPClient) StructuredResponse(ctx context.Context, request Request) ([
 	if len(request.Schema) == 0 || strings.TrimSpace(request.SchemaName) == "" {
 		return nil, Metadata{}, fmt.Errorf("%w: structured schema is required", ErrConfiguration)
 	}
+	parent := ctx
 	ctx, cancel := context.WithTimeout(ctx, c.config.Timeout)
 	defer cancel()
 	for attempt := 0; ; attempt++ {
-		output, metadata, retryAfter, err := c.do(ctx, request)
+		output, metadata, retryAfter, err := c.do(ctx, parent, request)
 		if err == nil || attempt >= c.config.MaxRetries || !retryable(err) {
 			return output, metadata, err
 		}
@@ -76,7 +77,7 @@ func (c *HTTPClient) StructuredResponse(ctx context.Context, request Request) ([
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return nil, Metadata{}, ctx.Err()
+			return nil, Metadata{}, timeoutOrCancel(parent)
 		case <-timer.C:
 		}
 	}
@@ -87,7 +88,17 @@ func retryable(err error) bool {
 	return errors.As(err, &provider) && (provider.Kind == ErrorTransient || provider.Kind == ErrorRateLimit)
 }
 
-func (c *HTTPClient) do(ctx context.Context, request Request) ([]byte, Metadata, time.Duration, error) {
+// timeoutOrCancel distinguishes a caller cancellation, which must propagate so
+// fallback never masks it, from an internal per-request provider timeout (the
+// caller context is still live), which is a transient, fallback-eligible error.
+func timeoutOrCancel(parent context.Context) error {
+	if parent.Err() != nil {
+		return parent.Err()
+	}
+	return &ProviderError{Kind: ErrorTransient}
+}
+
+func (c *HTTPClient) do(ctx, parent context.Context, request Request) ([]byte, Metadata, time.Duration, error) {
 	body := map[string]any{
 		"model":             c.config.Model,
 		"instructions":      request.Instructions,
@@ -113,10 +124,7 @@ func (c *HTTPClient) do(ctx context.Context, request Request) ([]byte, Metadata,
 	httpRequest.Header.Set("Content-Type", "application/json")
 	response, err := c.http.Do(httpRequest)
 	if err != nil {
-		if ctx.Err() != nil {
-			return nil, Metadata{}, 0, ctx.Err()
-		}
-		return nil, Metadata{}, 0, &ProviderError{Kind: ErrorTransient}
+		return nil, Metadata{}, 0, timeoutOrCancel(parent)
 	}
 	defer response.Body.Close()
 	limited := io.LimitReader(response.Body, 2<<20)

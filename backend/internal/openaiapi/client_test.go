@@ -81,3 +81,20 @@ func TestStructuredResponseDoesNotFallbackCanceledContext(t *testing.T) {
 }
 
 func asProvider(err error, target **ProviderError) bool { return errors.As(err, target) }
+
+func TestStructuredResponseFallsBackOnProviderTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		_, _ = w.Write([]byte(`{"id":"resp","model":"model","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"{}"}]}]}`))
+	}))
+	defer server.Close()
+	client, err := NewHTTPClient(Config{APIKey: "key", Model: "model", BaseURL: server.URL, Timeout: 20 * time.Millisecond}, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = client.StructuredResponse(context.Background(), Request{SchemaName: "test", Schema: json.RawMessage(`{}`)})
+	var provider *ProviderError
+	if !IsFallbackEligible(err) || !asProvider(err, &provider) || provider.Kind != ErrorTransient {
+		t.Fatalf("provider timeout err=%v want fallback-eligible transient", err)
+	}
+}
