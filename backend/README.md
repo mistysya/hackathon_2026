@@ -46,8 +46,9 @@ docker build --target runtime -t hackathon-2026-api .
 
 ### Opt-in live OpenAI smoke test
 
-Copy `.env.example` to `.env` and set an OpenAI API Platform Project key and an
-enabled Responses model. The following test sends one fake-data-only, chargeable
+From the repository root, copy `backend/.env.example` to `backend/.env` and set
+an OpenAI API Platform Project key and an enabled Responses model. From the
+`backend` directory, the following test sends one fake-data-only, chargeable
 Responses request, validates the generated safe campaign copy, and verifies that
 the generated mailbox message is persisted to its temporary SQLite database. It
 is skipped unless explicitly enabled, so it is safe for normal local and CI test

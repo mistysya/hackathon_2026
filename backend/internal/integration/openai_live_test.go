@@ -11,9 +11,21 @@ import (
 	"github.com/mistysya/hackathon_2026/backend/internal/campaign"
 	"github.com/mistysya/hackathon_2026/backend/internal/domain"
 	"github.com/mistysya/hackathon_2026/backend/internal/openaiapi"
+	"github.com/mistysya/hackathon_2026/backend/internal/ports"
 	"github.com/mistysya/hackathon_2026/backend/internal/store"
 	"github.com/mistysya/hackathon_2026/backend/internal/structured"
 )
+
+type recordingScenarioAgent struct {
+	delegate ports.ScenarioAgent
+	lastErr  error
+}
+
+func (agent *recordingScenarioAgent) Generate(ctx context.Context, input ports.ScenarioInput, feedback *ports.ValidationFeedback) ([]byte, error) {
+	raw, err := agent.delegate.Generate(ctx, input, feedback)
+	agent.lastErr = err
+	return raw, err
+}
 
 // TestLiveOpenAIScenarioCreatesSafeMailboxContent verifies the real Responses
 // integration with fake data only. It is deliberately opt-in because it sends
@@ -69,10 +81,11 @@ func TestLiveOpenAIScenarioCreatesSafeMailboxContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create structured validator: %v", err)
 	}
+	liveAgent := &recordingScenarioAgent{delegate: campaign.NewOpenAIScenarioAgent(client)}
 	service := campaign.NewService(
 		repository,
 		repository,
-		campaign.NewOpenAIScenarioAgent(client),
+		liveAgent,
 		validator,
 		campaign.NewCryptoIDGenerator(),
 	)
@@ -80,6 +93,9 @@ func TestLiveOpenAIScenarioCreatesSafeMailboxContent(t *testing.T) {
 	defer cancel()
 	generated, err := service.Generate(ctx, employeeID)
 	if err != nil {
+		if liveAgent.lastErr != nil {
+			t.Fatalf("generate fake mailbox content through the Responses API (model %q): %v", config.Model, liveAgent.lastErr)
+		}
 		t.Fatalf("generate fake mailbox content through the Responses API (model %q): %v", config.Model, err)
 	}
 
