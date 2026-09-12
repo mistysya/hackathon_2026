@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A privacy-safe simulated mailbox for the hackathon presentation.">
+  <title>Inbox — Security Training Demo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="mail-shell">
+    <header class="topbar">
+      <div class="brand">
+        <button class="icon-button mobile-menu" id="menuButton" type="button" aria-label="開啟選單" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+        <div class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" role="img"><path d="M4 8.5 16 17l12-8.5V24a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V8.5Z"/><path d="m4.5 8 10 7.1a2.6 2.6 0 0 0 3 0L27.5 8"/></svg>
+        </div>
+        <span class="brand__name">Postbox</span>
+      </div>
+
+      <label class="search" for="searchInput">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16.2 16.2 4 4"/></svg>
+        <input id="searchInput" type="search" placeholder="搜尋郵件" autocomplete="off">
+        <kbd>⌘ K</kbd>
+      </label>
+
+      <div class="topbar__actions">
+        <button class="icon-button" type="button" aria-label="說明" title="說明">?</button>
+        <button class="avatar" type="button" aria-label="測試使用者帳戶">A</button>
+      </div>
+    </header>
+
+    <aside class="sidebar" id="sidebar" aria-label="信箱資料夾">
+      <button class="compose" type="button" id="composeButton">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        撰寫郵件
+      </button>
+
+      <nav class="folders">
+        <button class="folder is-active" type="button" data-folder="inbox">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="m4 6 8 7 8-7"/></svg>
+          <span>收件匣</span><strong id="inboxCount">5</strong>
+        </button>
+        <button class="folder" type="button" data-folder="starred">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z"/></svg>
+          <span>已加星號</span>
+        </button>
+        <button class="folder" type="button" data-folder="snoozed">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <span>已延後</span>
+        </button>
+        <button class="folder" type="button" data-folder="sent">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 18-8-7 18-3-7-8-3Z"/><path d="m11 14 4-4"/></svg>
+          <span>寄件備份</span>
+        </button>
+        <button class="folder" type="button" data-folder="drafts">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M8 11h8M8 15h6"/></svg>
+          <span>草稿</span><strong>2</strong>
+        </button>
+      </nav>
+
+      <div class="sidebar__section">
+        <span>標籤</span>
+        <button type="button" aria-label="新增標籤">+</button>
+      </div>
+      <div class="labels">
+        <button type="button" data-label="work"><i class="label-dot label-dot--blue"></i>工作</button>
+        <button type="button" data-label="travel"><i class="label-dot label-dot--amber"></i>旅行</button>
+        <button type="button" data-label="updates"><i class="label-dot label-dot--violet"></i>最新消息</button>
+      </div>
+
+      <div class="storage">
+        <div><span>儲存空間</span><strong>2.1 GB / 15 GB</strong></div>
+        <div class="storage__track"><span></span></div>
+      </div>
+    </aside>
+
+    <main class="mail-main">
+      <section class="inbox-panel" id="inboxPanel" aria-labelledby="folderTitle">
+        <div class="mail-toolbar">
+          <div class="toolbar__primary">
+            <label class="check-control" title="全選">
+              <input id="selectAll" type="checkbox" aria-label="全選郵件">
+              <span></span>
+            </label>
+            <button class="toolbar-button" type="button" id="refreshButton" title="重新整理" aria-label="重新整理">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5"/><path d="M18.5 15a7 7 0 1 1-.2-6.3L20 11"/></svg>
+            </button>
+            <button class="toolbar-button" type="button" title="更多" aria-label="更多選項">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+            </button>
+          </div>
+          <div class="toolbar__meta">
+            <span id="rangeLabel">1–13，共 13 封</span>
+            <button class="toolbar-button" type="button" aria-label="上一頁" disabled>‹</button>
+            <button class="toolbar-button" type="button" aria-label="下一頁" disabled>›</button>
+          </div>
+        </div>
+
+        <div class="inbox-heading">
+          <div>
+            <p class="eyebrow">郵件總覽</p>
+            <h1 id="folderTitle">收件匣</h1>
+          </div>
+          <button class="filter-button" id="filterButton" type="button" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+            僅顯示未讀
+          </button>
+        </div>
+
+        <div class="mail-list" id="mailList" role="list" aria-live="polite"></div>
+        <div class="empty-state" id="emptyState" hidden>
+          <div aria-hidden="true">⌕</div>
+          <h2>找不到郵件</h2>
+          <p>請試試其他關鍵字或取消篩選。</p>
+        </div>
+      </section>
+
+      <article class="message-panel" id="messagePanel" aria-labelledby="messageSubject" hidden>
+        <div class="message-toolbar">
+          <button class="back-button" id="backButton" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg>
+            返回收件匣
+          </button>
+          <div>
+            <button class="toolbar-button" type="button" title="封存" aria-label="封存">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v12H4zM3 4h18v4H3zM9 12h6"/></svg>
+            </button>
+            <button class="toolbar-button" type="button" title="刪除" aria-label="刪除">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M7 7l1 14h8l1-14"/></svg>
+            </button>
+            <button class="toolbar-button" type="button" title="更多" aria-label="更多選項">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="message-content">
+          <div class="message-subject-row">
+            <h1 id="messageSubject"></h1>
+            <span class="message-label" id="messageLabel">收件匣</span>
+          </div>
+          <div class="sender-row">
+            <div class="sender-avatar" id="senderAvatar" aria-hidden="true"></div>
+            <div class="sender-details">
+              <strong id="messageSender"></strong>
+              <button type="button" id="senderAddress" aria-label="顯示寄件者詳細資料"></button>
+              <span>寄給我⌄</span>
+            </div>
+            <time id="messageDate"></time>
+            <button class="star-button message-star" type="button" aria-label="加上星號">☆</button>
+          </div>
+          <div class="message-body" id="messageBody"></div>
+        </div>
+      </article>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <dialog class="compose-dialog" id="composeDialog">
+    <form method="dialog">
+      <header><strong>新郵件</strong><button value="cancel" aria-label="關閉">×</button></header>
+      <label><span>收件者</span><input type="email" placeholder="name@example.test"></label>
+      <label><span>主旨</span><input type="text"></label>
+      <textarea aria-label="郵件內容"></textarea>
+      <footer><button class="send-button" value="cancel">傳送</button><small>演示模式不會真的寄出郵件</small></footer>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
