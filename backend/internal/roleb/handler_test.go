@@ -61,6 +61,14 @@ func TestSimulateCreatesOpaqueTokenAndLandingURL(t *testing.T) {
 	if len(token) != 32 || strings.Contains(token, "E001") {
 		t.Fatalf("token should be 32 hex chars and contain no employee id, got %q", token)
 	}
+	var subject, emailHTML string
+	var deliveredAt sql.NullString
+	if err := db.QueryRow(`SELECT subject, email_html, delivered_at FROM mailbox_messages WHERE campaign_id = 'c_demo'`).Scan(&subject, &emailHTML, &deliveredAt); err != nil {
+		t.Fatalf("read delivered mailbox message: %v", err)
+	}
+	if subject != "subject" || emailHTML != `<a href="{{landingUrl}}">CTA</a>` || !deliveredAt.Valid {
+		t.Fatalf("unexpected delivered mailbox message subject=%q html=%q delivered=%v", subject, emailHTML, deliveredAt)
+	}
 }
 
 func TestPostEventsIsIdempotentAndDoesNotStoreFormValues(t *testing.T) {
@@ -200,6 +208,49 @@ func TestCampaignReportReturnsNotFound(t *testing.T) {
 	handler.ServeHTTP(res, req)
 	if res.Code != http.StatusNotFound {
 		t.Fatalf("status = %d body=%s", res.Code, res.Body.String())
+	}
+}
+
+func TestCampaignReportReturnsEmptyReportForCampaignWithoutTargetsOrEvents(t *testing.T) {
+	db, handler := testServer(t)
+	defer db.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/c_demo", nil)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", res.Code, res.Body.String())
+	}
+
+	var report domain.CampaignReport
+	if err := json.NewDecoder(res.Body).Decode(&report); err != nil {
+		t.Fatalf("decode report: %v", err)
+	}
+	if report.TargetCount != 0 || report.Funnel != (domain.CampaignFunnel{}) {
+		t.Fatalf("unexpected empty report counts: %+v", report)
+	}
+	if report.Events == nil || len(report.Events) != 0 {
+		t.Fatalf("events = %#v, want a non-nil empty slice", report.Events)
+	}
+}
+
+func TestCampaignReportRejectsInvalidStoredData(t *testing.T) {
+	db, handler := testServer(t)
+	defer db.Close()
+	if _, err := db.Exec(`
+INSERT INTO tracking_events (campaign_id, employee_id, event_type, occurred_at)
+VALUES ('c_demo', 'E001', 'opened', '2026-09-12T18:00:00+08:00')`); err != nil {
+		t.Fatalf("seed invalid event: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/reports/c_demo", nil)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d body=%s", res.Code, res.Body.String())
+	}
+	if !strings.Contains(res.Body.String(), `"code":"internal_error"`) {
+		t.Fatalf("unexpected error body: %s", res.Body.String())
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/mistysya/hackathon_2026/backend/internal/domain"
 )
@@ -94,8 +95,11 @@ func (r *Repository) SimulateCampaign(ctx context.Context, campaignID string) (S
 	if err != nil {
 		return SimulateResponse{}, err
 	}
-	var employeeID string
-	if err := tx.QueryRowContext(ctx, `SELECT employee_id FROM campaigns WHERE id = ?`, campaignID).Scan(&employeeID); err != nil {
+	var employeeID, subject, emailHTML, landingConfigJSON string
+	if err := tx.QueryRowContext(ctx, `
+		SELECT employee_id, COALESCE(subject, ''), COALESCE(email_html, ''), landing_config_json
+		FROM campaigns WHERE id = ?
+	`, campaignID).Scan(&employeeID, &subject, &emailHTML, &landingConfigJSON); err != nil {
 		if err == sql.ErrNoRows {
 			return SimulateResponse{}, ErrNotFound
 		}
@@ -114,6 +118,9 @@ INSERT INTO campaign_targets (campaign_id, employee_id, token)
 VALUES (?, ?, ?)`, campaignID, employeeID, token); err != nil {
 		return SimulateResponse{}, err
 	}
+	if err := r.persistMailboxDelivery(ctx, tx, campaignID, employeeID, subject, emailHTML, landingConfigJSON); err != nil {
+		return SimulateResponse{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return SimulateResponse{}, err
 	}
@@ -129,9 +136,49 @@ VALUES (?, ?, ?)`, campaignID, employeeID, token); err != nil {
 	}, nil
 }
 
+// persistMailboxDelivery makes simulation the delivery boundary. INSERT OR
+// IGNORE backfills campaigns made before mailbox persistence was introduced;
+// current campaigns already have a row from store.CreateCampaign.
+func (r *Repository) persistMailboxDelivery(ctx context.Context, tx *sql.Tx, campaignID, employeeID, subject, emailHTML, landingConfigJSON string) error {
+	senderName := "Security Awareness Demo"
+	var config domain.LandingConfig
+	if json.Unmarshal([]byte(landingConfigJSON), &config) == nil && config.Brand != "" {
+		senderName = config.Brand
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO mailbox_messages (
+			campaign_id, employee_id, sender_name, sender_address, subject, email_html
+		) VALUES (?, ?, ?, 'notification@campaign.example.test', ?, ?)
+	`, campaignID, employeeID, senderName, subject, emailHTML); err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, `
+		UPDATE mailbox_messages
+		SET delivered_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+		WHERE campaign_id = ? AND delivered_at IS NULL
+	`, campaignID)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows != 1 {
+		return fmt.Errorf("mark mailbox delivery for campaign %q", campaignID)
+	}
+	return nil
+}
+
 func (r *Repository) CampaignReport(ctx context.Context, campaignID string) (domain.CampaignReport, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.CampaignReport{}, err
+	}
+	defer tx.Rollback()
+
 	var exists int
-	if err := r.db.QueryRowContext(ctx, `SELECT 1 FROM campaigns WHERE id = ?`, campaignID).Scan(&exists); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT 1 FROM campaigns WHERE id = ?`, campaignID).Scan(&exists); err != nil {
 		if err == sql.ErrNoRows {
 			return domain.CampaignReport{}, ErrNotFound
 		}
@@ -139,12 +186,12 @@ func (r *Repository) CampaignReport(ctx context.Context, campaignID string) (dom
 	}
 
 	report := domain.CampaignReport{CampaignID: campaignID, Events: []domain.CampaignEvent{}}
-	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM campaign_targets WHERE campaign_id = ?`, campaignID).Scan(&report.TargetCount); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM campaign_targets WHERE campaign_id = ?`, campaignID).Scan(&report.TargetCount); err != nil {
 		return domain.CampaignReport{}, err
 	}
 	report.Funnel.Simulated = report.TargetCount
 
-	if err := r.db.QueryRowContext(ctx, `
+	if err := tx.QueryRowContext(ctx, `
 SELECT
 	COUNT(DISTINCT CASE WHEN event_type = 'opened' THEN employee_id END),
 	COUNT(DISTINCT CASE WHEN event_type = 'clicked' THEN employee_id END),
@@ -160,7 +207,7 @@ WHERE campaign_id = ?`, campaignID).Scan(
 		return domain.CampaignReport{}, err
 	}
 
-	rows, err := r.db.QueryContext(ctx, `
+	rows, err := tx.QueryContext(ctx, `
 SELECT event_type, occurred_at
 FROM tracking_events
 WHERE campaign_id = ?
@@ -178,12 +225,33 @@ ORDER BY occurred_at ASC, id ASC`, campaignID)
 		if !event.EventType.Valid() {
 			return domain.CampaignReport{}, fmt.Errorf("invalid stored event type %q", event.EventType)
 		}
+		if err := validateRFC3339UTCTimestamp(event.OccurredAt); err != nil {
+			return domain.CampaignReport{}, err
+		}
 		report.Events = append(report.Events, event)
 	}
 	if err := rows.Err(); err != nil {
 		return domain.CampaignReport{}, err
 	}
+	if err := rows.Close(); err != nil {
+		return domain.CampaignReport{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return domain.CampaignReport{}, err
+	}
 	return report, nil
+}
+
+func validateRFC3339UTCTimestamp(value string) error {
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return fmt.Errorf("invalid stored event timestamp %q: %w", value, err)
+	}
+	_, offset := parsed.Zone()
+	if offset != 0 {
+		return fmt.Errorf("stored event timestamp is not UTC %q", value)
+	}
+	return nil
 }
 
 func newToken() (string, error) {
