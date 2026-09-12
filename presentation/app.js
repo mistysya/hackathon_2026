@@ -236,7 +236,7 @@ function renderList() {
 
 function createMessageRow(message) {
   const row = document.createElement("div");
-  row.className = `mail-row${message.unread ? " is-unread" : ""}`;
+  row.className = `mail-row${message.unread ? " is-unread" : ""}${message.isNew ? " is-new" : ""}`;
   row.dataset.id = message.id;
   row.setAttribute("role", "listitem");
   row.tabIndex = 0;
@@ -320,6 +320,7 @@ function openMessage(id, updateHash = true) {
   const body = document.querySelector("#messageBody");
   body.innerHTML = buildBody(message);
   bindMessageActions(message);
+  notifyCampaignOpened(message);
 
   inboxPanel.hidden = true;
   messagePanel.hidden = false;
@@ -333,6 +334,14 @@ function avatarLetter(sender) {
 }
 
 function buildBody(message) {
+  if (message.type === "generated-campaign") {
+    return `
+      <div class="generated-email">
+        <iframe id="generatedCampaignFrame" title="${escapeHtml(message.subject)}" sandbox="allow-popups allow-popups-to-escape-sandbox"></iframe>
+        <p>這封郵件由安全演練管理台產生，郵件內容顯示於隔離的預覽框架中。</p>
+      </div>`;
+  }
+
   if (message.type === "simulation") {
     return `
       <div class="email-card">
@@ -416,6 +425,12 @@ function buildBody(message) {
 }
 
 function bindMessageActions(message) {
+  const generatedFrame = document.querySelector("#generatedCampaignFrame");
+  if (generatedFrame) {
+    const emailHtml = message.emailHtml.replaceAll("{{landingUrl}}", message.landingUrl);
+    generatedFrame.srcdoc = addExternalLinkTarget(emailHtml);
+  }
+
   const reviewButton = document.querySelector("#reviewActivity");
   if (!reviewButton) return;
   reviewButton.addEventListener("click", () => {
@@ -442,6 +457,28 @@ function bindMessageActions(message) {
     showToast("已記錄模擬點擊事件（僅限本機展示）");
     document.querySelector("#trainingReveal").scrollIntoView({ behavior: "smooth", block: "center" });
   });
+}
+
+function addExternalLinkTarget(emailHtml) {
+  const base = '<base target="_blank">';
+  if (/<head(?:\s[^>]*)?>/i.test(emailHtml)) {
+    return emailHtml.replace(/<head(\s[^>]*)?>/i, (head) => `${head}${base}`);
+  }
+  if (/<html(?:\s[^>]*)?>/i.test(emailHtml)) {
+    return emailHtml.replace(/<html(\s[^>]*)?>/i, (html) => `${html}<head>${base}</head>`);
+  }
+  return `<!doctype html><html><head>${base}</head><body>${emailHtml}</body></html>`;
+}
+
+function notifyCampaignOpened(message) {
+  if (!message.isCampaign || message.openedEventSent) return;
+  message.openedEventSent = true;
+  message.deliverySource?.postMessage({
+    type: "simsafe:mailbox-event",
+    campaignId: message.campaignId,
+    token: message.token,
+    eventType: "opened"
+  }, message.deliveryOrigin);
 }
 
 function escapeHtml(value) {
@@ -547,6 +584,63 @@ window.addEventListener("popstate", () => {
   if (id) openMessage(id, false);
   else closeMessage(false);
 });
+
+function isAllowedDemoOrigin(origin) {
+  if (origin === window.location.origin) return true;
+  try {
+    return ["localhost", "127.0.0.1"].includes(new URL(origin).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function textPreview(emailHtml) {
+  const document = new DOMParser().parseFromString(emailHtml, "text/html");
+  const text = document.body.textContent?.replace(/\s+/g, " ").trim() || "安全演練郵件已送達。";
+  return text.length > 92 ? `${text.slice(0, 92)}…` : text;
+}
+
+function receiveGeneratedCampaign(event) {
+  if (!isAllowedDemoOrigin(event.origin) || event.data?.type !== "simsafe:campaign-delivered") return;
+  const { campaign, target } = event.data;
+  if (!campaign || !target || typeof campaign.campaignId !== "string" || typeof campaign.subject !== "string" || typeof campaign.emailHtml !== "string") return;
+  if (typeof target.token !== "string" || typeof target.landingUrl !== "string") return;
+  if (messages.some((message) => message.campaignId === campaign.campaignId)) return;
+
+  const generatedMessage = {
+    id: `campaign-${campaign.campaignId}`,
+    campaignId: campaign.campaignId,
+    token: target.token,
+    landingUrl: target.landingUrl,
+    sender: campaign.landingConfig?.brand || "Security Training",
+    address: "notification@campaign.example.test",
+    subject: campaign.subject,
+    preview: textPreview(campaign.emailHtml),
+    date: "現在",
+    fullDate: new Intl.DateTimeFormat("zh-TW", { dateStyle: "medium", timeStyle: "short" }).format(new Date()),
+    unread: true,
+    starred: false,
+    label: "work",
+    accent: "#0b57d0",
+    type: "generated-campaign",
+    emailHtml: campaign.emailHtml,
+    isCampaign: true,
+    isNew: true,
+    deliverySource: event.source,
+    deliveryOrigin: event.origin
+  };
+
+  messages.unshift(generatedMessage);
+  renderList();
+  document.title = "(1) 收到新郵件 — Postbox";
+  showToast("收到 1 封新郵件");
+  window.setTimeout(() => {
+    generatedMessage.isNew = false;
+    document.querySelector(`[data-id="${generatedMessage.id}"]`)?.classList.remove("is-new");
+  }, 1800);
+}
+
+window.addEventListener("message", receiveGeneratedCampaign);
 
 renderList();
 const initialId = new URLSearchParams(window.location.hash.slice(1)).get("mail");
