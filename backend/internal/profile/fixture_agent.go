@@ -45,6 +45,18 @@ func (agent *FixtureAgent) Generate(_ context.Context, input ports.ProfileInput,
 	if hasEventEvidence {
 		profile.RiskSignals = []string{"May be a suitable candidate for a follow-up security training scenario based on a public event."}
 		profile.RecommendedScenario = "event_followup"
+		return json.Marshal(profile)
+	}
+
+	// The offline demo may only use authorized work-role context. This keeps
+	// fixture campaigns varied without inventing personal facts or requiring a
+	// live provider.
+	roleContext := strings.ToLower(input.Employee.Department + " " + input.Employee.Title)
+	switch {
+	case strings.Contains(roleContext, "people"), strings.Contains(roleContext, "human resources"), strings.Contains(roleContext, " hr "):
+		profile.RecommendedScenario = "benefit_update"
+	case strings.Contains(roleContext, "engineering"), strings.Contains(roleContext, "developer"), strings.Contains(roleContext, "devops"), strings.Contains(roleContext, "security"), strings.Contains(roleContext, " it "):
+		profile.RecommendedScenario = "saas_security_notice"
 	}
 	return json.Marshal(profile)
 }

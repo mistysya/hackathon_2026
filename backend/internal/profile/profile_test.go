@@ -102,6 +102,31 @@ func TestFixtureAgentUsesSafeEmptyEvidenceFallback(t *testing.T) {
 	}
 }
 
+func TestFixtureAgentSelectsRoleAwareScenarioWithoutPersonalEvidence(t *testing.T) {
+	cases := []struct {
+		name, department, title, want string
+	}{
+		{"people operations", "People Operations", "People Operations Manager", "benefit_update"},
+		{"engineering", "Quant Engineering", "Platform Engineer", "saas_security_notice"},
+		{"general", "Customer Success", "Customer Success Manager", "training_reminder"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := NewFixtureAgent().Generate(context.Background(), ports.ProfileInput{Employee: domain.Employee{EmployeeID: "E999", DisplayName: "Demo", Department: tc.department, Title: tc.title}}, nil)
+			if err != nil {
+				t.Fatalf("Generate: %v", err)
+			}
+			var profile domain.EmployeeProfile
+			if err := json.Unmarshal(raw, &profile); err != nil {
+				t.Fatalf("decode generated profile: %v", err)
+			}
+			if profile.RecommendedScenario != tc.want {
+				t.Fatalf("RecommendedScenario = %q, want %q", profile.RecommendedScenario, tc.want)
+			}
+		})
+	}
+}
+
 func TestServiceFirstTrySuccessReturnsPersistedProfile(t *testing.T) {
 	repository := newFakeRepository()
 	validator := &fakeValidator{}
